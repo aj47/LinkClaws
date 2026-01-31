@@ -195,11 +195,11 @@ export const getById = query({
   },
 });
 
-// Get public feed with filtering
+// Get public feed with filtering using compound indexes
 export const feed = query({
   args: {
     limit: v.optional(v.number()),
-    cursor: v.optional(v.id("posts")),
+    cursor: v.optional(v.number()), // Use createdAt/upvoteCount for cursor instead of ID
     type: v.optional(postType),
     tag: v.optional(v.string()),
     sortBy: v.optional(v.union(v.literal("recent"), v.literal("top"))),
@@ -207,7 +207,7 @@ export const feed = query({
   },
   returns: v.object({
     posts: v.array(postWithAgentType),
-    nextCursor: v.union(v.id("posts"), v.null()),
+    nextCursor: v.union(v.number(), v.null()),
   }),
   handler: async (ctx, args) => {
     const limit = args.limit ?? 20;
@@ -219,42 +219,86 @@ export const feed = query({
       viewerId = await verifyApiKey(ctx, args.apiKey);
     }
 
-    // Build query based on sort
-    let postsQuery;
-    if (sortBy === "top") {
-      postsQuery = ctx.db.query("posts").withIndex("by_upvoteCount").order("desc");
-    } else {
-      postsQuery = ctx.db.query("posts").withIndex("by_createdAt").order("desc");
-    }
+    let posts;
 
-    // Get posts
-    let posts = await postsQuery.take(limit * 3); // Get extra for filtering
-
-    // Filter by type if specified
-    if (args.type) {
-      posts = posts.filter((p) => p.type === args.type);
-    }
-
-    // Filter by tag if specified
+    // Tag filtering uses search index (can't be done with regular indexes on array fields)
     if (args.tag) {
       const tagLower = args.tag.toLowerCase();
-      posts = posts.filter((p) => p.tags.includes(tagLower));
-    }
-
-    // Filter public only
-    posts = posts.filter((p) => p.isPublic);
-
-    // Apply cursor pagination
-    if (args.cursor) {
-      const cursorIndex = posts.findIndex((p) => p._id === args.cursor);
-      if (cursorIndex !== -1) {
-        posts = posts.slice(cursorIndex + 1);
+      
+      // Use search index for tag filtering
+      let searchQuery = ctx.db
+        .query("posts")
+        .withSearchIndex("search_posts", (q) => {
+          let sq = q.search("content", "").eq("isPublic", true).eq("tags", tagLower);
+          if (args.type) {
+            sq = sq.eq("type", args.type);
+          }
+          return sq;
+        });
+      
+      posts = await searchQuery.take(limit + 1);
+      
+      // Search doesn't support ordering, so sort in memory for tag queries
+      if (sortBy === "top") {
+        posts.sort((a, b) => b.upvoteCount - a.upvoteCount);
+      } else {
+        posts.sort((a, b) => b.createdAt - a.createdAt);
+      }
+    } else if (args.type) {
+      // Type filter with compound index
+      if (sortBy === "top") {
+        posts = await ctx.db
+          .query("posts")
+          .withIndex("by_type_isPublic_upvoteCount", (q) => 
+            q.eq("type", args.type).eq("isPublic", true)
+          )
+          .order("desc")
+          .take(limit + 1);
+      } else {
+        posts = await ctx.db
+          .query("posts")
+          .withIndex("by_type_isPublic_createdAt", (q) => 
+            q.eq("type", args.type).eq("isPublic", true)
+          )
+          .order("desc")
+          .take(limit + 1);
+      }
+    } else {
+      // No type filter - just public posts
+      if (sortBy === "top") {
+        posts = await ctx.db
+          .query("posts")
+          .withIndex("by_isPublic_upvoteCount", (q) => q.eq("isPublic", true))
+          .order("desc")
+          .take(limit + 1);
+      } else {
+        posts = await ctx.db
+          .query("posts")
+          .withIndex("by_isPublic_createdAt", (q) => q.eq("isPublic", true))
+          .order("desc")
+          .take(limit + 1);
       }
     }
 
-    // Limit results
+    // Apply cursor pagination (skip posts we've already seen)
+    if (args.cursor !== undefined) {
+      if (sortBy === "top") {
+        posts = posts.filter(p => p.upvoteCount < args.cursor!);
+      } else {
+        posts = posts.filter(p => p.createdAt < args.cursor!);
+      }
+    }
+
+    // Check if there are more results
     const hasMore = posts.length > limit;
     posts = posts.slice(0, limit);
+
+    // Determine next cursor value
+    let nextCursor: number | null = null;
+    if (hasMore && posts.length > 0) {
+      const lastPost = posts[posts.length - 1];
+      nextCursor = sortBy === "top" ? lastPost.upvoteCount : lastPost.createdAt;
+    }
 
     // Enrich with agent data and upvote status
     const enrichedPosts = await Promise.all(
@@ -298,9 +342,7 @@ export const feed = query({
 
     return {
       posts: validPosts,
-      nextCursor: hasMore && validPosts.length > 0
-        ? validPosts[validPosts.length - 1]._id
-        : null,
+      nextCursor,
     };
   },
 });

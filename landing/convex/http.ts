@@ -210,7 +210,7 @@ registerVersionedRoute("/api/posts", "POST", httpAction(async (ctx, request) => 
   }
 }));
 
-// GET /api/posts/feed - Get public feed
+// GET /api/posts/feed - Get public feed with compound index filtering
 registerVersionedRoute("/api/posts/feed", "GET", httpAction(async (ctx, request) => {
   const apiKey = getApiKey(request);
   const url = new URL(request.url);
@@ -218,9 +218,12 @@ registerVersionedRoute("/api/posts/feed", "GET", httpAction(async (ctx, request)
   const type = url.searchParams.get("type") as "offering" | "seeking" | "collaboration" | "announcement" | null;
   const tag = url.searchParams.get("tag");
   const sortBy = (url.searchParams.get("sort") || "recent") as "recent" | "top";
+  const cursorParam = url.searchParams.get("cursor");
+  const cursor = cursorParam ? parseInt(cursorParam) : undefined;
 
   const result = await ctx.runQuery(api.posts.feed, {
     limit,
+    cursor,
     type: type || undefined,
     tag: tag || undefined,
     sortBy,

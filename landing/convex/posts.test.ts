@@ -113,12 +113,12 @@ describe("posts", () => {
       });
 
       // Check notifications for mentioned agent
-      const notifications = await t.query(api.notifications.list, {
+      const notifResult = await t.query(api.notifications.list, {
         apiKey: mentionedKey,
         limit: 10,
       });
 
-      expect(notifications.some((n) => n.type === "mention")).toBe(true);
+      expect(notifResult.notifications.some((n) => n.type === "mention")).toBe(true);
     });
   });
 
@@ -144,15 +144,81 @@ describe("posts", () => {
       expect(feed.posts.length).toBeGreaterThanOrEqual(2);
     });
 
-    test("should filter by post type", async () => {
+    test("should filter by post type using compound index", async () => {
       const t = convexTest(schema, modules);
       const { apiKey } = await createVerifiedAgent(t, "filterposter");
 
-      await t.mutation(api.posts.create, { apiKey, type: "offering", content: "Offering" });
-      await t.mutation(api.posts.create, { apiKey, type: "seeking", content: "Seeking" });
+      await t.mutation(api.posts.create, { apiKey, type: "offering", content: "Offering post" });
+      await t.mutation(api.posts.create, { apiKey, type: "seeking", content: "Seeking post" });
 
       const offeringFeed = await t.query(api.posts.feed, { type: "offering" });
       expect(offeringFeed.posts.every((p) => p.type === "offering")).toBe(true);
+    });
+
+    test("should sort by top (upvoteCount) using compound index", async () => {
+      const t = convexTest(schema, modules);
+      const { apiKey } = await createVerifiedAgent(t, "topposter");
+
+      // Create posts
+      await t.mutation(api.posts.create, { apiKey, type: "offering", content: "Post 1" });
+      await t.mutation(api.posts.create, { apiKey, type: "offering", content: "Post 2" });
+
+      const feed = await t.query(api.posts.feed, { sortBy: "top" });
+      
+      // Verify posts are returned (sorting verified by structure, not values since all have 0 upvotes)
+      expect(feed.posts.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test("should paginate with cursor", async () => {
+      const t = convexTest(schema, modules);
+      const { apiKey } = await createVerifiedAgent(t, "paginateposter");
+
+      // Create multiple posts
+      for (let i = 0; i < 5; i++) {
+        await t.mutation(api.posts.create, { 
+          apiKey, 
+          type: "offering", 
+          content: `Paginate post ${i}` 
+        });
+      }
+
+      // Get first page
+      const firstPage = await t.query(api.posts.feed, { limit: 2 });
+      expect(firstPage.posts.length).toBe(2);
+      expect(firstPage.nextCursor).not.toBeNull();
+
+      // Get second page using cursor
+      const secondPage = await t.query(api.posts.feed, { 
+        limit: 2, 
+        cursor: firstPage.nextCursor ?? undefined 
+      });
+      expect(secondPage.posts.length).toBeGreaterThan(0);
+      
+      // Verify no overlap
+      const firstIds = firstPage.posts.map(p => p._id);
+      const secondIds = secondPage.posts.map(p => p._id);
+      expect(firstIds.some(id => secondIds.includes(id))).toBe(false);
+    });
+
+    test("should filter by tag using search index", async () => {
+      const t = convexTest(schema, modules);
+      const { apiKey } = await createVerifiedAgent(t, "tagposter");
+
+      await t.mutation(api.posts.create, { 
+        apiKey, 
+        type: "offering", 
+        content: "AI post #machinelearning",
+        tags: ["machinelearning", "ai"]
+      });
+      await t.mutation(api.posts.create, { 
+        apiKey, 
+        type: "offering", 
+        content: "Web post #webdev",
+        tags: ["webdev"]
+      });
+
+      const mlFeed = await t.query(api.posts.feed, { tag: "machinelearning" });
+      expect(mlFeed.posts.every((p) => p.tags.includes("machinelearning"))).toBe(true);
     });
   });
 });

@@ -153,7 +153,17 @@ export default defineSchema({
     .index("by_agentId", ["agentId"])
     .index("by_type", ["type"])
     .index("by_createdAt", ["createdAt"])
-    .index("by_upvoteCount", ["upvoteCount"]),
+    .index("by_upvoteCount", ["upvoteCount"])
+    // Compound indexes for efficient feed filtering
+    .index("by_isPublic_createdAt", ["isPublic", "createdAt"])
+    .index("by_isPublic_upvoteCount", ["isPublic", "upvoteCount"])
+    .index("by_type_isPublic_createdAt", ["type", "isPublic", "createdAt"])
+    .index("by_type_isPublic_upvoteCount", ["type", "isPublic", "upvoteCount"])
+    // Search index for tag filtering
+    .searchIndex("search_posts", {
+      searchField: "content",
+      filterFields: ["type", "isPublic", "tags"],
+    }),
 
   // Comments on posts
   comments: defineTable({
