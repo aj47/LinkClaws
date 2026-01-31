@@ -21,6 +21,7 @@ export const connect = mutation({
   args: {
     apiKey: v.string(),
     targetAgentId: v.id("agents"),
+    message: v.optional(v.string()), // Optional message for connection request
   },
   returns: v.union(
     v.object({ success: v.literal(true), connectionId: v.id("connections") }),
@@ -64,16 +65,21 @@ export const connect = mutation({
       fromAgentId: agentId,
       toAgentId: args.targetAgentId,
       status: "accepted", // Auto-accept for now (like Twitter follow)
+      message: args.message,
       createdAt: now,
       updatedAt: now,
     });
 
-    // Notify target agent
+    // Notify target agent with optional message
+    const notificationBody = args.message
+      ? `@${agent.handle} is now following you: "${args.message}"`
+      : `@${agent.handle} is now following you`;
+
     await ctx.db.insert("notifications", {
       agentId: args.targetAgentId,
       type: "connection_accepted",
       title: "New follower",
-      body: `@${agent.handle} is now following you`,
+      body: notificationBody,
       relatedAgentId: agentId,
       read: false,
       createdAt: now,
@@ -253,11 +259,62 @@ export const getCounts = query({
   },
 });
 
+// Get pending connection requests for current agent
+export const getPendingRequests = query({
+  args: {
+    apiKey: v.string(),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(
+    v.object({
+      _id: v.id("connections"),
+      fromAgentId: v.id("agents"),
+      fromAgentName: v.string(),
+      fromAgentHandle: v.string(),
+      fromAgentAvatarUrl: v.optional(v.string()),
+      fromAgentVerified: v.boolean(),
+      message: v.optional(v.string()),
+      createdAt: v.number(),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const agentId = await verifyApiKey(ctx, args.apiKey);
+    if (!agentId) return [];
+
+    const limit = args.limit ?? 50;
+    const requests = await ctx.db
+      .query("connections")
+      .withIndex("by_toAgentId_status", (q) =>
+        q.eq("toAgentId", agentId).eq("status", "pending")
+      )
+      .take(limit);
+
+    return Promise.all(
+      requests.map(async (conn) => {
+        const agent = await ctx.db.get(conn.fromAgentId);
+        if (!agent) return null;
+
+        return {
+          _id: conn._id,
+          fromAgentId: agent._id,
+          fromAgentName: agent.name,
+          fromAgentHandle: agent.handle,
+          fromAgentAvatarUrl: agent.avatarUrl,
+          fromAgentVerified: agent.verified,
+          message: conn.message,
+          createdAt: conn.createdAt,
+        };
+      })
+    ).then((results) => results.filter((r) => r !== null));
+  },
+});
+
 // Toggle follow (convenience function)
 export const toggleFollow = mutation({
   args: {
     apiKey: v.string(),
     targetAgentId: v.id("agents"),
+    message: v.optional(v.string()), // Optional message for connection request
   },
   returns: v.union(
     v.object({ success: v.literal(true), isFollowing: v.boolean() }),
@@ -302,15 +359,21 @@ export const toggleFollow = mutation({
         fromAgentId: agentId,
         toAgentId: args.targetAgentId,
         status: "accepted",
+        message: args.message,
         createdAt: now,
         updatedAt: now,
       });
+
+      // Notify target agent with optional message
+      const notificationBody = args.message
+        ? `@${agent.handle} is now following you: "${args.message}"`
+        : `@${agent.handle} is now following you`;
 
       await ctx.db.insert("notifications", {
         agentId: args.targetAgentId,
         type: "connection_accepted",
         title: "New follower",
-        body: `@${agent.handle} is now following you`,
+        body: notificationBody,
         relatedAgentId: agentId,
         read: false,
         createdAt: now,

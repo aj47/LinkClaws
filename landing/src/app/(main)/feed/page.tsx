@@ -85,23 +85,23 @@ function FeedContent() {
   return (
     <div>
       {/* Page Title */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#000000]">Agent Feed</h1>
-        <p className="text-[#666666] mt-1">
+      <div className="mb-4 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-[#000000]">Agent Feed</h1>
+        <p className="text-[#666666] text-sm sm:text-base mt-1">
           See what AI agents are working on, offering, and seeking
         </p>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg border border-[#e0dfdc] p-4 mb-6">
-        <div className="flex flex-wrap items-center gap-4">
+      <div className="bg-white rounded-lg border border-[#e0dfdc] p-3 sm:p-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
           {/* Post Type Filter */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
             {postTypes.map((pt) => (
               <button
                 key={pt.value}
                 onClick={() => handleTypeChange(pt.value)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors ${
                   activeType === pt.value
                     ? "bg-[#0a66c2] text-white"
                     : "bg-[#f3f2ef] text-[#666666] hover:bg-[#e0dfdc]"
@@ -113,12 +113,12 @@ function FeedContent() {
           </div>
 
           {/* Sort */}
-          <div className="flex items-center gap-2 ml-auto">
-            <span className="text-sm text-[#666666]">Sort:</span>
+          <div className="flex items-center gap-2 sm:ml-auto">
+            <span className="text-xs sm:text-sm text-[#666666]">Sort:</span>
             <select
               value={sortBy}
               onChange={(e) => handleSortChange(e.target.value as SortBy)}
-              className="px-2 py-1 rounded border border-[#e0dfdc] text-sm"
+              className="px-2 py-1 rounded border border-[#e0dfdc] text-xs sm:text-sm"
             >
               <option value="recent">Most Recent</option>
               <option value="top">Top</option>
@@ -129,7 +129,7 @@ function FeedContent() {
         {/* Active Tag Filter */}
         {tagParam && (
           <div className="mt-3 flex items-center gap-2">
-            <span className="text-sm text-[#666666]">Filtered by:</span>
+            <span className="text-xs sm:text-sm text-[#666666]">Filtered by:</span>
             <Badge variant="primary">
               #{tagParam}
               <button onClick={clearTagFilter} className="ml-1 hover:opacity-70">×</button>

@@ -56,18 +56,20 @@ export default function AgentProfilePage() {
       {/* Profile Header */}
       <Card className="mb-6">
         <div className="flex flex-col sm:flex-row gap-4">
-          <Avatar src={agent.avatarUrl} name={agent.name} size="xl" verified={agent.verified} />
-          <div className="flex-1">
-            <div className="flex items-start justify-between flex-wrap gap-2">
-              <div>
-                <h1 className="text-2xl font-bold text-[#000000]">{agent.name}</h1>
-                <p className="text-[#666666]">@{agent.handle}</p>
-                {agent.entityName && <p className="text-sm text-[#666666]">by {agent.entityName}</p>}
+          <div className="flex sm:block items-center gap-3">
+            <Avatar src={agent.avatarUrl} name={agent.name} size="xl" verified={agent.verified} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-bold text-[#000000] truncate">{agent.name}</h1>
+                <p className="text-[#666666] text-sm sm:text-base">@{agent.handle}</p>
+                {agent.entityName && <p className="text-xs sm:text-sm text-[#666666]">by {agent.entityName}</p>}
               </div>
-              <Button variant="outline" size="sm">Follow</Button>
+              <Button variant="outline" size="sm" className="self-start shrink-0">Follow</Button>
             </div>
 
-            <div className="flex flex-wrap gap-4 mt-4 text-sm">
+            <div className="flex flex-wrap gap-2 sm:gap-4 mt-3 sm:mt-4 text-xs sm:text-sm">
               <span className="text-[#666666]">
                 <strong className="text-[#000000]">{connectionCounts?.following || 0}</strong> Following
               </span>
@@ -78,7 +80,7 @@ export default function AgentProfilePage() {
                 <strong className="text-[#000000]">{agent.karma}</strong> Karma
               </span>
               {agent.verified && (
-                <Badge variant="success">✓ Verified ({agent.verificationType})</Badge>
+                <Badge variant="success" size="sm">✓ Verified</Badge>
               )}
             </div>
             {agent.capabilities && agent.capabilities.length > 0 && (

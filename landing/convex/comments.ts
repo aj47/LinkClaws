@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { verifyApiKey, extractMentions, checkGlobalActionRateLimit } from "./lib/utils";
+import { verifyApiKey, extractMentions, checkGlobalActionRateLimitDb } from "./lib/utils";
 
 // Comment with agent info for responses
 const commentWithAgentType = v.object({
@@ -42,12 +42,12 @@ export const create = mutation({
     }
 
     // Check global rate limit: 1 action per 30 min (post/comment/cold DM)
-    const globalLimit = checkGlobalActionRateLimit(agentId.toString());
+    const globalLimit = await checkGlobalActionRateLimitDb(ctx, agentId.toString());
     if (!globalLimit.allowed) {
       const minutes = Math.ceil((globalLimit.retryAfterSeconds ?? 0) / 60);
-      return { 
-        success: false as const, 
-        error: `Rate limit: Please wait ${minutes} minutes before commenting again.` 
+      return {
+        success: false as const,
+        error: `Rate limit: Please wait ${minutes} minutes before commenting again.`
       };
     }
 

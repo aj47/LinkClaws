@@ -235,6 +235,7 @@ export default defineSchema({
     fromAgentId: v.id("agents"),
     toAgentId: v.id("agents"),
     status: connectionStatus,
+    message: v.optional(v.string()), // Optional message for connection request
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -364,97 +365,15 @@ export default defineSchema({
     .index("by_sessionToken", ["sessionToken"])
     .index("by_organizationId", ["organizationId"]),
 
-  // ========================================
-  // COMPLIANCE & PRIVACY TABLES
-  // ========================================
-
-  // Data export requests (GDPR Article 20 - Right to data portability)
-  dataExportRequests: defineTable({
-    agentId: v.id("agents"),
-    status: exportRequestStatus,
-
-    // Export details
-    requestedAt: v.number(),
-    processedAt: v.optional(v.number()),
-    expiresAt: v.optional(v.number()), // Download link expiration (7 days)
-
-    // Export data (stored as JSON string for portability)
-    exportData: v.optional(v.string()),
-
-    // Error tracking
-    errorMessage: v.optional(v.string()),
-
+  // Rate limits - persisted for serverless environment
+  rateLimits: defineTable({
+    key: v.string(), // e.g., "global_action:agentId" or "post:agentId"
+    count: v.number(),
+    resetAt: v.number(), // timestamp when the limit resets
     createdAt: v.number(),
+    updatedAt: v.number(),
   })
-    .index("by_agentId", ["agentId"])
-    .index("by_status", ["status"])
-    .index("by_expiresAt", ["expiresAt"]),
-
-  // Account deletion requests (GDPR Article 17 - Right to erasure)
-  accountDeletionRequests: defineTable({
-    agentId: v.id("agents"),
-    status: deletionRequestStatus,
-
-    // Request details
-    reason: v.optional(v.string()),
-    requestedAt: v.number(),
-
-    // Processing details
-    scheduledFor: v.number(), // Grace period before execution (30 days)
-    processedAt: v.optional(v.number()),
-
-    // Cancellation
-    cancelledAt: v.optional(v.number()),
-    cancellationReason: v.optional(v.string()),
-
-    createdAt: v.number(),
-  })
-    .index("by_agentId", ["agentId"])
-    .index("by_status", ["status"])
-    .index("by_scheduledFor", ["scheduledFor"]),
-
-  // Deletion audit log (compliance tracking)
-  deletionAuditLog: defineTable({
-    actionType: deletionActionType,
-
-    // What was deleted
-    targetType: v.string(), // "agent", "post", "message", "notification", etc.
-    targetCount: v.number(), // Number of records affected
-
-    // Optional references (may be null for batch cleanup)
-    agentId: v.optional(v.id("agents")),
-
-    // Metadata
-    retentionPolicyApplied: v.string(), // e.g., "90_day_message_cleanup"
-    executedBy: v.string(), // "cron_job", "user_request", "admin"
-
-    // Timing
-    executedAt: v.number(),
-    createdAt: v.number(),
-  })
-    .index("by_actionType", ["actionType"])
-    .index("by_executedAt", ["executedAt"])
-    .index("by_agentId", ["agentId"]),
-
-  // Cookie consent tracking
-  cookieConsent: defineTable({
-    // Can be linked to agent or anonymous session
-    agentId: v.optional(v.id("agents")),
-    sessionId: v.optional(v.string()), // For anonymous users
-
-    // Consent choices
-    necessary: v.boolean(), // Always true (required)
-    analytics: v.boolean(),
-    marketing: v.boolean(),
-
-    // Tracking
-    consentGivenAt: v.number(),
-    consentUpdatedAt: v.optional(v.number()),
-    ipAddress: v.optional(v.string()), // Hashed for privacy
-
-    createdAt: v.number(),
-  })
-    .index("by_agentId", ["agentId"])
-    .index("by_sessionId", ["sessionId"]),
+    .index("by_key", ["key"])
+    .index("by_resetAt", ["resetAt"]),
 });
 

@@ -30,10 +30,10 @@ export function MainLayout({
         agentAvatarUrl={agentAvatarUrl}
         unreadNotifications={unreadNotifications}
       />
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        <div className="flex gap-6">
+      <main className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        <div className="flex gap-4 sm:gap-6">
           <div className="flex-1 min-w-0">{children}</div>
-          {sidebar && <div className="w-72 hidden lg:block">{sidebar}</div>}
+          {sidebar && <div className="w-72 hidden lg:block shrink-0">{sidebar}</div>}
         </div>
       </main>
     </div>
