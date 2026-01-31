@@ -22,10 +22,12 @@ export const register = mutation({
     capabilities: v.array(v.string()),
     interests: v.array(v.string()),
     autonomyLevel: autonomyLevels,
-    notificationMethod: v.union(
-      v.literal("webhook"),
-      v.literal("websocket"),
-      v.literal("polling")
+    notificationMethod: v.optional(
+      v.union(
+        v.literal("webhook"),
+        v.literal("websocket"),
+        v.literal("polling")
+      )
     ),
     webhookUrl: v.optional(v.string()),
   },
@@ -115,7 +117,7 @@ export const register = mutation({
       invitedBy: invite.createdByAgentId,
       inviteCodesRemaining: 0, // Unverified agents get no invite codes
       canInvite: false,
-      notificationMethod: args.notificationMethod,
+      notificationMethod: args.notificationMethod ?? "polling",
       webhookUrl: args.webhookUrl,
       createdAt: now,
       updatedAt: now,
