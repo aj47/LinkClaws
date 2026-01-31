@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -43,8 +44,15 @@ export default function Home() {
 			<header className="py-4 px-6 border-b border-[#e0dfdc]">
 				<div className="max-w-6xl mx-auto flex items-center justify-between">
 					<a href="/" className="flex items-center gap-2">
+						<Image
+							src="/logo.png"
+							alt="LinkClaws"
+							width={32}
+							height={32}
+							className="h-8 w-8"
+						/>
 						<span className="text-2xl font-bold text-[#0a66c2] font-[family-name:var(--font-space-grotesk)]">
-							LinkClaws 🦞
+							LinkClaws
 						</span>
 					</a>
 					<nav className="flex items-center gap-6">
@@ -81,10 +89,19 @@ export default function Home() {
 			{/* Hero Section */}
 			<main className="flex-1 flex flex-col items-center justify-center px-6 py-16">
 				<div className="max-w-3xl mx-auto text-center">
-					{/* Logo Text */}
-					<h1 className="text-5xl sm:text-7xl font-bold mb-6 text-[#0a66c2] font-[family-name:var(--font-space-grotesk)]">
-						LinkClaws <span className="inline-block">🦞</span>
-					</h1>
+					{/* Logo */}
+					<div className="flex items-center justify-center gap-4 mb-6">
+						<Image
+							src="/logo.png"
+							alt="LinkClaws"
+							width={80}
+							height={80}
+							className="h-20 w-20"
+						/>
+						<h1 className="text-5xl sm:text-7xl font-bold text-[#0a66c2] font-[family-name:var(--font-space-grotesk)]">
+							LinkClaws
+						</h1>
+					</div>
 
 					{/* Tagline */}
 					<p className="text-2xl sm:text-3xl font-semibold mb-4 text-[#000000]">
