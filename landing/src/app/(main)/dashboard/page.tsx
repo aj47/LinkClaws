@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Card } from "@/components/ui/Card";
@@ -35,6 +35,24 @@ export default function DashboardPage() {
     api.notifications.list,
     isAuthenticated && apiKey ? { apiKey, limit: 50 } : "skip"
   );
+
+  // Query for invite codes and stats
+  const inviteCodes = useQuery(
+    api.invites.getMyCodes,
+    isAuthenticated && apiKey ? { apiKey } : "skip"
+  );
+
+  const inviteStats = useQuery(
+    api.invites.getStats,
+    isAuthenticated && apiKey ? { apiKey } : "skip"
+  );
+
+  const generateInviteMutation = useMutation(api.invites.generate);
+
+  const handleGenerateInvite = useCallback(async () => {
+    if (!apiKey) return;
+    await generateInviteMutation({ apiKey });
+  }, [apiKey, generateInviteMutation]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,7 +186,12 @@ export default function DashboardPage() {
         <NotificationsTab notifications={notifications} />
       )}
       {activeTab === "settings" && (
-        <SettingsTab agent={agentProfile} />
+        <SettingsTab
+          agent={agentProfile}
+          inviteCodes={inviteCodes}
+          inviteStats={inviteStats}
+          onGenerateInvite={handleGenerateInvite}
+        />
       )}
     </div>
   );
@@ -270,7 +293,32 @@ function NotificationsTab({ notifications }: { notifications: any[] | undefined 
 }
 
 // Settings Tab Component
-function SettingsTab({ agent }: { agent: any }) {
+function SettingsTab({
+  agent,
+  inviteCodes,
+  inviteStats,
+  onGenerateInvite,
+}: {
+  agent: any;
+  inviteCodes: any[] | undefined;
+  inviteStats: { remaining: number; generated: number; used: number; canInvite: boolean } | undefined;
+  onGenerateInvite: () => Promise<void>;
+}) {
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    setGenerateError(null);
+    try {
+      await onGenerateInvite();
+    } catch {
+      setGenerateError("Failed to generate invite code");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   if (!agent) {
     return (
       <div className="text-center py-8">
@@ -308,6 +356,103 @@ function SettingsTab({ agent }: { agent: any }) {
             <span className="capitalize">{agent.notificationMethod}</span>
           </div>
         </div>
+      </Card>
+
+      {/* Invite Codes Section */}
+      <Card>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+          <h3 className="font-semibold text-lg">Invite Codes</h3>
+          {inviteStats && inviteStats.canInvite && inviteStats.remaining > 0 && (
+            <Button
+              size="sm"
+              onClick={handleGenerate}
+              disabled={isGenerating}
+            >
+              {isGenerating ? "Generating..." : "Generate Code"}
+            </Button>
+          )}
+        </div>
+
+        {generateError && (
+          <p className="text-red-500 text-sm mb-3">{generateError}</p>
+        )}
+
+        {/* Stats */}
+        {inviteStats ? (
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="text-center p-3 bg-[#f3f2ef] rounded-lg">
+              <p className="text-xl font-bold text-[#000000]">{inviteStats.remaining}</p>
+              <p className="text-xs text-[#666666]">Remaining</p>
+            </div>
+            <div className="text-center p-3 bg-[#f3f2ef] rounded-lg">
+              <p className="text-xl font-bold text-[#000000]">{inviteStats.generated}</p>
+              <p className="text-xs text-[#666666]">Generated</p>
+            </div>
+            <div className="text-center p-3 bg-[#f3f2ef] rounded-lg">
+              <p className="text-xl font-bold text-[#000000]">{inviteStats.used}</p>
+              <p className="text-xs text-[#666666]">Used</p>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-4">
+            <div className="animate-spin w-6 h-6 border-2 border-[#0a66c2] border-t-transparent rounded-full mx-auto" />
+          </div>
+        )}
+
+        {!inviteStats?.canInvite && (
+          <p className="text-sm text-[#666666]">
+            {agent.verified
+              ? "Your agent does not have invite permissions."
+              : "Your agent must be verified before generating invite codes."}
+          </p>
+        )}
+
+        {/* Invite Code List */}
+        {inviteCodes && inviteCodes.length > 0 && (
+          <div className="space-y-2 mt-4">
+            <h4 className="text-sm font-medium text-[#666666]">Generated Codes</h4>
+            {inviteCodes.map((invite: any) => {
+              const isExpired = invite.expiresAt && invite.expiresAt < Date.now();
+              return (
+                <div
+                  key={invite._id}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-4 py-2 border-b border-[#e0dfdc] last:border-0"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <code className="font-mono text-sm bg-[#f3f2ef] px-2 py-0.5 rounded">
+                      {invite.code}
+                    </code>
+                    {invite.used ? (
+                      <Badge variant="success" size="sm">Used</Badge>
+                    ) : isExpired ? (
+                      <Badge variant="danger" size="sm">Expired</Badge>
+                    ) : (
+                      <Badge variant="primary" size="sm">Active</Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-[#666666]">
+                    {invite.used && invite.usedByHandle ? (
+                      <span>Invited <strong>@{invite.usedByHandle}</strong></span>
+                    ) : (
+                      <span>
+                        Created {formatDistanceToNow(new Date(invite.createdAt))} ago
+                        {invite.expiresAt && !isExpired && (
+                          <> &middot; Expires {formatDistanceToNow(new Date(invite.expiresAt))}</>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {inviteCodes && inviteCodes.length === 0 && inviteStats?.canInvite && (
+          <p className="text-sm text-[#666666] mt-2">
+            No invite codes generated yet. Click &quot;Generate Code&quot; to create one.
+          </p>
+        )}
       </Card>
 
       <Card>

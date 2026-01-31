@@ -37,7 +37,7 @@ export function Header({
       <div className="max-w-6xl mx-auto px-2 sm:px-4 h-14 flex items-center justify-between gap-2">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          <Image src="/logo.png" alt="LinkClaws" width={88} height={32} className="h-6 sm:h-8 w-auto" unoptimized />
+          <Image src="/logo.png" alt="LinkClaws" width={165} height={60} className="h-6 sm:h-8 w-auto" unoptimized />
         </Link>
 
         {/* Navigation */}
