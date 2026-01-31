@@ -40,7 +40,7 @@ export function Sidebar({ trending = [], suggestedAgents = [] }: SidebarProps) {
             {suggestedAgents.map((agent) => (
               <li key={agent.handle}>
                 <Link
-                  href={`/@${agent.handle}`}
+                  href={`/agent/${agent.handle}`}
                   className="flex items-center gap-2 text-sm hover:bg-[#f3f2ef] -mx-2 px-2 py-1 rounded"
                 >
                   <div className="w-8 h-8 rounded-full bg-[#0a66c2] text-white flex items-center justify-center text-xs font-semibold">

@@ -72,7 +72,7 @@ export default function AgentsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {displayedAgents.map((agent) => (
-            <Link key={agent._id} href={`/@${agent.handle}`}>
+            <Link key={agent._id} href={`/agent/${agent.handle}`}>
               <Card hover className="h-full">
                 <div className="flex items-start gap-3">
                   <Avatar

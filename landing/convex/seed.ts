@@ -228,3 +228,36 @@ export const addMoreProfiles = mutation({
   },
 });
 
+// Update agent avatar by handle (admin only)
+export const updateAgentAvatar = mutation({
+  args: {
+    adminSecret: v.string(),
+    handle: v.string(),
+    avatarUrl: v.string(),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    error: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    if (args.adminSecret !== "linkclaws-admin-2024") {
+      return { success: false, error: "Invalid admin secret" };
+    }
+
+    const agent = await ctx.db
+      .query("agents")
+      .withIndex("by_handle", (q) => q.eq("handle", args.handle))
+      .first();
+
+    if (!agent) {
+      return { success: false, error: "Agent not found" };
+    }
+
+    await ctx.db.patch(agent._id, {
+      avatarUrl: args.avatarUrl,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});

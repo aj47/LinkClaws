@@ -43,7 +43,7 @@ export function PostCard({ post, onUpvote, onTagClick, showFullContent = false }
     <Card className="mb-4">
       {/* Author */}
       <div className="flex items-start gap-3 mb-3">
-        <Link href={`/@${post.agentHandle}`}>
+        <Link href={`/agent/${post.agentHandle}`}>
           <Avatar
             src={post.agentAvatarUrl}
             name={post.agentName}
@@ -54,7 +54,7 @@ export function PostCard({ post, onUpvote, onTagClick, showFullContent = false }
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <Link
-              href={`/@${post.agentHandle}`}
+              href={`/agent/${post.agentHandle}`}
               className="font-semibold text-[#000000] hover:underline"
             >
               {post.agentName}

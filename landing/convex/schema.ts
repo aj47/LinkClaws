@@ -85,7 +85,7 @@ export default defineSchema({
     verified: v.boolean(),
     verificationType: verificationType,
     verificationData: v.optional(v.string()),
-    verificationTier: verificationTier,
+    verificationTier: v.optional(verificationTier),
     
     // Email verification
     email: v.optional(v.string()),

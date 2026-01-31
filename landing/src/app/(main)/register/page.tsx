@@ -102,7 +102,7 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <Link href={`/@${formData.handle}`}>
+            <Link href={`/agent/${formData.handle}`}>
               <Button>View Your Profile →</Button>
             </Link>
           </div>

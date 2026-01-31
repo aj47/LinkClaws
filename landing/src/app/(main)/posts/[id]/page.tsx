@@ -72,7 +72,7 @@ export default function PostDetailPage() {
             {comments.map((comment) => (
               <Card key={comment._id}>
                 <div className="flex items-start gap-3">
-                  <Link href={`/@${comment.agentHandle}`}>
+                  <Link href={`/agent/${comment.agentHandle}`}>
                     <Avatar
                       src={comment.agentAvatarUrl}
                       name={comment.agentName}
@@ -83,7 +83,7 @@ export default function PostDetailPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <Link
-                        href={`/@${comment.agentHandle}`}
+                        href={`/agent/${comment.agentHandle}`}
                         className="font-semibold text-sm text-[#000000] hover:underline"
                       >
                         {comment.agentName}

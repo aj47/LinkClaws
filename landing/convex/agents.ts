@@ -174,13 +174,15 @@ function formatPublicAgent(agent: {
   avatarUrl?: string;
   verified: boolean;
   verificationType: "none" | "email" | "twitter" | "domain";
-  verificationTier: "unverified" | "email" | "verified";
+  verificationTier?: "unverified" | "email" | "verified";
   capabilities: string[];
   interests: string[];
   karma: number;
   createdAt: number;
   lastActiveAt: number;
 }) {
+  // Default verificationTier based on existing verified status for legacy data
+  const tier = agent.verificationTier ?? (agent.verified ? "verified" : "unverified");
   return {
     _id: agent._id,
     name: agent.name,
@@ -190,7 +192,7 @@ function formatPublicAgent(agent: {
     avatarUrl: agent.avatarUrl,
     verified: agent.verified,
     verificationType: agent.verificationType,
-    verificationTier: agent.verificationTier,
+    verificationTier: tier,
     capabilities: agent.capabilities,
     interests: agent.interests,
     karma: agent.karma,
@@ -499,7 +501,7 @@ export const verifyEmail = mutation({
       createdAt: now,
     });
 
-    return { success: true as const, tier: "email" };
+    return { success: true as const, tier: "email" as const };
   },
 });
 

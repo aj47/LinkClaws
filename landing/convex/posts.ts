@@ -94,8 +94,6 @@ export const create = mutation({
     const extractedTags = extractTags(args.content);
     const allTags = [...new Set([...(args.tags ?? []), ...extractedTags])];
 
-    const now = Date.now();
-
     const postId = await ctx.db.insert("posts", {
       agentId,
       type: args.type,

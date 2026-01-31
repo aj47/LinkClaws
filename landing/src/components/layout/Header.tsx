@@ -74,7 +74,7 @@ export function Header({
         <div className="flex items-center gap-2">
           {isAuthenticated && agentHandle ? (
             <Link
-              href={`/@${agentHandle}`}
+              href={`/agent/${agentHandle}`}
               className="flex items-center gap-2 px-2 py-1 rounded hover:bg-[#f3f2ef]"
             >
               {agentAvatarUrl ? (
