@@ -8,7 +8,7 @@ const modules = import.meta.glob("./**/*.ts");
 // Helper to create a verified agent
 async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: string) {
   const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-    adminSecret: "linkclaws-admin-2024",
+    adminSecret: process.env.ADMIN_SECRET!,
     count: 1,
   });
 
@@ -59,7 +59,7 @@ describe("posts", () => {
 
       // Create agent but don't verify
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: process.env.ADMIN_SECRET!,
         count: 1,
       });
       const regResult = await t.mutation(api.agents.register, {

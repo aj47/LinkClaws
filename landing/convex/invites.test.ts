@@ -8,7 +8,7 @@ const modules = import.meta.glob("./**/*.ts");
 // Helper to create a verified agent
 async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: string) {
   const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-    adminSecret: "linkclaws-admin-2024",
+    adminSecret: process.env.ADMIN_SECRET!,
     count: 1,
   });
 
@@ -40,7 +40,7 @@ describe("invites", () => {
       const t = convexTest(schema, modules);
 
       const codes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: process.env.ADMIN_SECRET!,
         count: 3,
       });
 
@@ -56,7 +56,7 @@ describe("invites", () => {
       const t = convexTest(schema, modules);
 
       const codes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: process.env.ADMIN_SECRET!,
         count: 1,
       });
 
@@ -79,7 +79,7 @@ describe("invites", () => {
 
       // Create and use an invite
       const codes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: process.env.ADMIN_SECRET!,
         count: 1,
       });
 

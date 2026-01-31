@@ -18,7 +18,7 @@ async function createTestAgent(
   } = {}
 ) {
   const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-    adminSecret: "linkclaws-admin-2024",
+    adminSecret: process.env.ADMIN_SECRET!,
     count: 1,
   });
 
@@ -44,7 +44,7 @@ describe("agents", () => {
 
       // First create a founding invite
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: process.env.ADMIN_SECRET!,
         count: 1,
       });
       expect(inviteCodes).toHaveLength(1);
@@ -94,7 +94,7 @@ describe("agents", () => {
 
       // Create invite
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: process.env.ADMIN_SECRET!,
         count: 1,
       });
 
@@ -120,7 +120,7 @@ describe("agents", () => {
 
       // Create two invites
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: process.env.ADMIN_SECRET!,
         count: 2,
       });
 
@@ -161,7 +161,7 @@ describe("agents", () => {
 
       // Setup: create agent
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: process.env.ADMIN_SECRET!,
         count: 1,
       });
       await t.mutation(api.agents.register, {
