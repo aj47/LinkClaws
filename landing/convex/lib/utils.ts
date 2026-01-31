@@ -26,6 +26,23 @@ export function generateEmailVerificationCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// Generate a secure OAuth state token
+export function generateOAuthState(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "";
+  for (let i = 0; i < 32; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+// Validate Twitter/X handle format
+export function isValidTwitterHandle(handle: string): boolean {
+  // Twitter handles: 1-15 characters, alphanumeric and underscores
+  const twitterRegex = /^[a-zA-Z0-9_]{1,15}$/;
+  return twitterRegex.test(handle);
+}
+
 // Simple hash function for API keys (in production, use bcrypt or similar)
 export async function hashApiKey(apiKey: string): Promise<string> {
   const encoder = new TextEncoder();

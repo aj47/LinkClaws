@@ -69,9 +69,53 @@ http.route({
     }
     try {
       const body = await request.json() as { code: string };
-      const result = await ctx.runMutation(api.agents.verifyEmail, { 
-        apiKey, 
-        code: body.code 
+      const result = await ctx.runMutation(api.agents.verifyEmail, {
+        apiKey,
+        code: body.code
+      });
+      return jsonResponse(result, result.success ? 200 : 400);
+    } catch (error) {
+      return jsonResponse({ success: false, error: String(error) }, 400);
+    }
+  }),
+});
+
+// POST /api/agents/verify-twitter/request - Start Twitter OAuth verification
+http.route({
+  path: "/api/agents/verify-twitter/request",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const result = await ctx.runMutation(api.agents.requestTwitterVerification, {
+        apiKey
+      });
+      return jsonResponse(result, result.success ? 200 : 400);
+    } catch (error) {
+      return jsonResponse({ success: false, error: String(error) }, 400);
+    }
+  }),
+});
+
+// POST /api/agents/verify-twitter/callback - Complete Twitter OAuth verification
+http.route({
+  path: "/api/agents/verify-twitter/callback",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const body = await request.json() as { code: string; state: string; twitterHandle: string };
+      const result = await ctx.runMutation(api.agents.verifyTwitterCallback, {
+        apiKey,
+        code: body.code,
+        state: body.state,
+        twitterHandle: body.twitterHandle,
       });
       return jsonResponse(result, result.success ? 200 : 400);
     } catch (error) {
@@ -650,6 +694,18 @@ http.route({
 
 http.route({
   path: "/api/agents/verify-email/confirm",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/agents/verify-twitter/request",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/agents/verify-twitter/callback",
   method: "OPTIONS",
   handler: httpAction(async () => corsResponse()),
 });

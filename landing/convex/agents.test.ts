@@ -157,5 +157,238 @@ describe("agents", () => {
       expect(agent).toBeNull();
     });
   });
+
+  describe("requestTwitterVerification", () => {
+    test("should return authorization URL with valid API key", async () => {
+      const t = convexTest(schema, modules);
+
+      // Setup: create agent
+      const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
+        adminSecret: "linkclaws-admin-2024",
+        count: 1,
+      });
+      const registerResult = await t.mutation(api.agents.register, {
+        inviteCode: inviteCodes[0],
+        name: "Test Agent",
+        handle: "testagent",
+        entityName: "Test Company",
+        capabilities: ["dev"],
+        interests: ["ai"],
+        autonomyLevel: "full_autonomy",
+        notificationMethod: "polling",
+      });
+
+      expect(registerResult.success).toBe(true);
+      if (!registerResult.success) return;
+
+      // Request Twitter verification
+      const result = await t.mutation(api.agents.requestTwitterVerification, {
+        apiKey: registerResult.apiKey,
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.authorizationUrl).toContain("twitter.com/i/oauth2/authorize");
+        expect(result.state).toBeDefined();
+        expect(result.state.length).toBe(32);
+        expect(result.expiresAt).toBeGreaterThan(Date.now());
+      }
+    });
+
+    test("should reject invalid API key", async () => {
+      const t = convexTest(schema, modules);
+
+      const result = await t.mutation(api.agents.requestTwitterVerification, {
+        apiKey: "lc_invalid_key_12345678901234567",
+      });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("Invalid API key");
+      }
+    });
+  });
+
+  describe("verifyTwitterCallback", () => {
+    test("should verify agent with valid callback data", async () => {
+      const t = convexTest(schema, modules);
+
+      // Setup: create agent
+      const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
+        adminSecret: "linkclaws-admin-2024",
+        count: 1,
+      });
+      const registerResult = await t.mutation(api.agents.register, {
+        inviteCode: inviteCodes[0],
+        name: "Test Agent",
+        handle: "testagent",
+        entityName: "Test Company",
+        capabilities: ["dev"],
+        interests: ["ai"],
+        autonomyLevel: "full_autonomy",
+        notificationMethod: "polling",
+      });
+
+      expect(registerResult.success).toBe(true);
+      if (!registerResult.success) return;
+
+      // First request Twitter verification to get a valid state
+      const requestResult = await t.mutation(api.agents.requestTwitterVerification, {
+        apiKey: registerResult.apiKey,
+      });
+
+      expect(requestResult.success).toBe(true);
+      if (!requestResult.success) return;
+
+      // Complete verification with callback
+      const callbackResult = await t.mutation(api.agents.verifyTwitterCallback, {
+        apiKey: registerResult.apiKey,
+        code: "test_oauth_code",
+        state: requestResult.state,
+        twitterHandle: "testuser",
+      });
+
+      expect(callbackResult.success).toBe(true);
+      if (callbackResult.success) {
+        expect(callbackResult.tier).toBe("verified");
+        expect(callbackResult.twitterHandle).toBe("testuser");
+      }
+
+      // Verify agent is now fully verified
+      const agent = await t.query(api.agents.getByHandle, { handle: "testagent" });
+      expect(agent?.verified).toBe(true);
+      expect(agent?.verificationType).toBe("twitter");
+      expect(agent?.verificationTier).toBe("verified");
+    });
+
+    test("should reject invalid state token", async () => {
+      const t = convexTest(schema, modules);
+
+      // Setup: create agent
+      const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
+        adminSecret: "linkclaws-admin-2024",
+        count: 1,
+      });
+      const registerResult = await t.mutation(api.agents.register, {
+        inviteCode: inviteCodes[0],
+        name: "Test Agent",
+        handle: "testagent",
+        entityName: "Test Company",
+        capabilities: ["dev"],
+        interests: ["ai"],
+        autonomyLevel: "full_autonomy",
+        notificationMethod: "polling",
+      });
+
+      expect(registerResult.success).toBe(true);
+      if (!registerResult.success) return;
+
+      // Request Twitter verification first
+      await t.mutation(api.agents.requestTwitterVerification, {
+        apiKey: registerResult.apiKey,
+      });
+
+      // Try to verify with invalid state
+      const callbackResult = await t.mutation(api.agents.verifyTwitterCallback, {
+        apiKey: registerResult.apiKey,
+        code: "test_oauth_code",
+        state: "invalid_state_token_12345678901",
+        twitterHandle: "testuser",
+      });
+
+      expect(callbackResult.success).toBe(false);
+      if (!callbackResult.success) {
+        expect(callbackResult.error).toContain("Invalid or expired state");
+      }
+    });
+
+    test("should reject invalid Twitter handle format", async () => {
+      const t = convexTest(schema, modules);
+
+      // Setup: create agent
+      const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
+        adminSecret: "linkclaws-admin-2024",
+        count: 1,
+      });
+      const registerResult = await t.mutation(api.agents.register, {
+        inviteCode: inviteCodes[0],
+        name: "Test Agent",
+        handle: "testagent",
+        entityName: "Test Company",
+        capabilities: ["dev"],
+        interests: ["ai"],
+        autonomyLevel: "full_autonomy",
+        notificationMethod: "polling",
+      });
+
+      expect(registerResult.success).toBe(true);
+      if (!registerResult.success) return;
+
+      // Request Twitter verification
+      const requestResult = await t.mutation(api.agents.requestTwitterVerification, {
+        apiKey: registerResult.apiKey,
+      });
+
+      expect(requestResult.success).toBe(true);
+      if (!requestResult.success) return;
+
+      // Try to verify with invalid Twitter handle (too long)
+      const callbackResult = await t.mutation(api.agents.verifyTwitterCallback, {
+        apiKey: registerResult.apiKey,
+        code: "test_oauth_code",
+        state: requestResult.state,
+        twitterHandle: "this_handle_is_way_too_long_for_twitter",
+      });
+
+      expect(callbackResult.success).toBe(false);
+      if (!callbackResult.success) {
+        expect(callbackResult.error).toContain("Invalid Twitter handle");
+      }
+    });
+
+    test("should handle @ prefix in Twitter handle", async () => {
+      const t = convexTest(schema, modules);
+
+      // Setup: create agent
+      const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
+        adminSecret: "linkclaws-admin-2024",
+        count: 1,
+      });
+      const registerResult = await t.mutation(api.agents.register, {
+        inviteCode: inviteCodes[0],
+        name: "Test Agent",
+        handle: "testagent",
+        entityName: "Test Company",
+        capabilities: ["dev"],
+        interests: ["ai"],
+        autonomyLevel: "full_autonomy",
+        notificationMethod: "polling",
+      });
+
+      expect(registerResult.success).toBe(true);
+      if (!registerResult.success) return;
+
+      // Request Twitter verification
+      const requestResult = await t.mutation(api.agents.requestTwitterVerification, {
+        apiKey: registerResult.apiKey,
+      });
+
+      expect(requestResult.success).toBe(true);
+      if (!requestResult.success) return;
+
+      // Verify with @ prefix (should be stripped)
+      const callbackResult = await t.mutation(api.agents.verifyTwitterCallback, {
+        apiKey: registerResult.apiKey,
+        code: "test_oauth_code",
+        state: requestResult.state,
+        twitterHandle: "@testuser",
+      });
+
+      expect(callbackResult.success).toBe(true);
+      if (callbackResult.success) {
+        expect(callbackResult.twitterHandle).toBe("testuser"); // @ stripped
+      }
+    });
+  });
 });
 

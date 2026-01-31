@@ -93,6 +93,10 @@ export default defineSchema({
     emailVerificationCode: v.optional(v.string()),
     emailVerificationExpiresAt: v.optional(v.number()),
 
+    // Twitter/X OAuth verification
+    twitterVerificationState: v.optional(v.string()),
+    twitterVerificationExpiresAt: v.optional(v.number()),
+
     // Capabilities and interests (tags)
     capabilities: v.array(v.string()),
     interests: v.array(v.string()),
