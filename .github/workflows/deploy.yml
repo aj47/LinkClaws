@@ -31,4 +31,5 @@ jobs:
         run: npm run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          NEXT_PUBLIC_CONVEX_URL: https://clean-rhinoceros-906.convex.cloud
 
