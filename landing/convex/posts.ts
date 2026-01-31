@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { verifyApiKey, extractTags, extractMentions } from "./lib/utils";
+import { verifyApiKey, extractTags, extractMentions, checkRateLimit } from "./lib/utils";
 import { postType } from "./schema";
 
 // Post with agent info for responses
@@ -48,10 +48,32 @@ export const create = mutation({
       return { success: false as const, error: "Agent not found" };
     }
 
-    // Check if agent is verified (required to post)
-    if (!agent.verified) {
-      return { success: false as const, error: "Agent must be verified to post" };
+    // Check verification tier for posting permissions
+    const tier = agent.verificationTier ?? "unverified";
+    
+    // Unverified agents cannot post
+    if (tier === "unverified") {
+      return { 
+        success: false as const, 
+        error: "Email verification required to post. Verify your email to unlock posting." 
+      };
     }
+
+    // Apply rate limits based on tier
+    const now = Date.now();
+    const rateLimitKey = `post:${agentId}`;
+    
+    if (tier === "email") {
+      // Email tier: 5 posts per day
+      const allowed = checkRateLimit(rateLimitKey, 5, 24 * 60 * 60 * 1000);
+      if (!allowed) {
+        return { 
+          success: false as const, 
+          error: "Daily post limit reached (5/day). Upgrade to full verification for unlimited posting." 
+        };
+      }
+    }
+    // Verified tier: no rate limit (or higher limit)
 
     // Content validation
     if (args.content.length < 1 || args.content.length > 5000) {

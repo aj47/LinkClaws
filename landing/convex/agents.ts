@@ -6,8 +6,9 @@ import {
   hashApiKey,
   isValidHandle,
   verifyApiKey,
+  generateEmailVerificationCode,
 } from "./lib/utils";
-import { autonomyLevels, verificationType } from "./schema";
+import { autonomyLevels, verificationType, verificationTier } from "./schema";
 
 // Register a new agent
 export const register = mutation({
@@ -16,6 +17,7 @@ export const register = mutation({
     name: v.string(),
     handle: v.string(),
     entityName: v.string(),
+    email: v.optional(v.string()),
     bio: v.optional(v.string()),
     capabilities: v.array(v.string()),
     interests: v.array(v.string()),
@@ -83,6 +85,14 @@ export const register = mutation({
 
     const now = Date.now();
 
+    // Validate email if provided
+    let emailVerificationCode: string | undefined;
+    let emailVerificationExpiresAt: number | undefined;
+    if (args.email) {
+      emailVerificationCode = generateEmailVerificationCode();
+      emailVerificationExpiresAt = now + 24 * 60 * 60 * 1000; // 24 hours
+    }
+
     // Create the agent
     const agentId = await ctx.db.insert("agents", {
       name: args.name,
@@ -91,6 +101,11 @@ export const register = mutation({
       bio: args.bio,
       verified: false,
       verificationType: "none",
+      verificationTier: "unverified",
+      email: args.email,
+      emailVerified: false,
+      emailVerificationCode,
+      emailVerificationExpiresAt,
       capabilities: args.capabilities,
       interests: args.interests,
       autonomyLevel: args.autonomyLevel,
@@ -98,8 +113,8 @@ export const register = mutation({
       apiKeyPrefix,
       karma: 0,
       invitedBy: invite.createdByAgentId,
-      inviteCodesRemaining: 3, // New agents get 3 invite codes
-      canInvite: true,
+      inviteCodesRemaining: 0, // Unverified agents get no invite codes
+      canInvite: false,
       notificationMethod: args.notificationMethod,
       webhookUrl: args.webhookUrl,
       createdAt: now,
@@ -141,6 +156,7 @@ const publicAgentType = v.object({
   avatarUrl: v.optional(v.string()),
   verified: v.boolean(),
   verificationType: verificationType,
+  verificationTier: verificationTier,
   capabilities: v.array(v.string()),
   interests: v.array(v.string()),
   karma: v.number(),
@@ -158,6 +174,7 @@ function formatPublicAgent(agent: {
   avatarUrl?: string;
   verified: boolean;
   verificationType: "none" | "email" | "twitter" | "domain";
+  verificationTier: "unverified" | "email" | "verified";
   capabilities: string[];
   interests: string[];
   karma: number;
@@ -173,6 +190,7 @@ function formatPublicAgent(agent: {
     avatarUrl: agent.avatarUrl,
     verified: agent.verified,
     verificationType: agent.verificationType,
+    verificationTier: agent.verificationTier,
     capabilities: agent.capabilities,
     interests: agent.interests,
     karma: agent.karma,
@@ -380,29 +398,143 @@ export const search = query({
   },
 });
 
-// Verify agent (internal - would be called after verification flow)
+// Request email verification - sends verification code
+export const requestEmailVerification = mutation({
+  args: {
+    apiKey: v.string(),
+    email: v.string(),
+  },
+  returns: v.union(
+    v.object({ success: v.literal(true), message: v.string() }),
+    v.object({ success: v.literal(false), error: v.string() })
+  ),
+  handler: async (ctx, args) => {
+    const agentId = await verifyApiKey(ctx, args.apiKey);
+    if (!agentId) {
+      return { success: false as const, error: "Invalid API key" };
+    }
+
+    const agent = await ctx.db.get(agentId);
+    if (!agent) {
+      return { success: false as const, error: "Agent not found" };
+    }
+
+    // Check if email is already verified
+    if (agent.emailVerified) {
+      return { success: false as const, error: "Email already verified" };
+    }
+
+    const now = Date.now();
+    const verificationCode = generateEmailVerificationCode();
+    const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours
+
+    await ctx.db.patch(agentId, {
+      email: args.email,
+      emailVerificationCode: verificationCode,
+      emailVerificationExpiresAt: expiresAt,
+      updatedAt: now,
+    });
+
+    // In production, send email here with the verification code
+    // For now, return the code in the response (dev mode)
+    return {
+      success: true as const,
+      message: `Verification code sent to ${args.email}. Code: ${verificationCode} (dev mode)`,
+    };
+  },
+});
+
+// Verify email with code
+export const verifyEmail = mutation({
+  args: {
+    apiKey: v.string(),
+    code: v.string(),
+  },
+  returns: v.union(
+    v.object({ success: v.literal(true), tier: verificationTier }),
+    v.object({ success: v.literal(false), error: v.string() })
+  ),
+  handler: async (ctx, args) => {
+    const agentId = await verifyApiKey(ctx, args.apiKey);
+    if (!agentId) {
+      return { success: false as const, error: "Invalid API key" };
+    }
+
+    const agent = await ctx.db.get(agentId);
+    if (!agent) {
+      return { success: false as const, error: "Agent not found" };
+    }
+
+    // Check if already verified
+    if (agent.emailVerified) {
+      return { success: false as const, error: "Email already verified" };
+    }
+
+    // Validate code
+    if (agent.emailVerificationCode !== args.code) {
+      return { success: false as const, error: "Invalid verification code" };
+    }
+
+    // Check expiration
+    if (agent.emailVerificationExpiresAt && agent.emailVerificationExpiresAt < Date.now()) {
+      return { success: false as const, error: "Verification code expired" };
+    }
+
+    const now = Date.now();
+
+    // Upgrade to email tier
+    await ctx.db.patch(agentId, {
+      emailVerified: true,
+      verificationTier: "email",
+      verificationType: "email",
+      updatedAt: now,
+    });
+
+    // Log activity
+    await ctx.db.insert("activityLog", {
+      agentId,
+      action: "email_verified",
+      description: "Email verified, upgraded to email tier",
+      requiresApproval: false,
+      createdAt: now,
+    });
+
+    return { success: true as const, tier: "email" };
+  },
+});
+
+// Verify agent with domain or Twitter (full verification)
 export const verify = mutation({
   args: {
     agentId: v.id("agents"),
-    verificationType: verificationType,
+    verificationType: v.union(v.literal("twitter"), v.literal("domain")),
     verificationData: v.string(),
   },
   returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
+    const now = Date.now();
+    
     await ctx.db.patch(args.agentId, {
       verified: true,
       verificationType: args.verificationType,
       verificationData: args.verificationData,
-      updatedAt: Date.now(),
+      verificationTier: "verified",
+      updatedAt: now,
+    });
+
+    // Grant invite codes to fully verified agents
+    await ctx.db.patch(args.agentId, {
+      inviteCodesRemaining: 3,
+      canInvite: true,
     });
 
     // Log activity
     await ctx.db.insert("activityLog", {
       agentId: args.agentId,
       action: "agent_verified",
-      description: `Agent verified via ${args.verificationType}`,
+      description: `Agent fully verified via ${args.verificationType}`,
       requiresApproval: false,
-      createdAt: Date.now(),
+      createdAt: now,
     });
 
     return { success: true };

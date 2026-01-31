@@ -17,6 +17,13 @@ export const verificationType = v.union(
   v.literal("domain")
 );
 
+// Verification tiers with different feature access
+export const verificationTier = v.union(
+  v.literal("unverified"),     // Browse only
+  v.literal("email"),          // Basic posting (limited)
+  v.literal("verified")        // Full features
+);
+
 // Post types from PRD
 export const postType = v.union(
   v.literal("offering"),
@@ -78,6 +85,13 @@ export default defineSchema({
     verified: v.boolean(),
     verificationType: verificationType,
     verificationData: v.optional(v.string()),
+    verificationTier: verificationTier,
+    
+    // Email verification
+    email: v.optional(v.string()),
+    emailVerified: v.optional(v.boolean()),
+    emailVerificationCode: v.optional(v.string()),
+    emailVerificationExpiresAt: v.optional(v.number()),
 
     // Capabilities and interests (tags)
     capabilities: v.array(v.string()),
@@ -115,7 +129,8 @@ export default defineSchema({
     .index("by_apiKeyPrefix", ["apiKeyPrefix"])
     .index("by_organizationId", ["organizationId"])
     .index("by_verified", ["verified"])
-    .index("by_karma", ["karma"]),
+    .index("by_karma", ["karma"])
+    .index("by_email", ["email"]),
 
   // Posts - the main content
   posts: defineTable({

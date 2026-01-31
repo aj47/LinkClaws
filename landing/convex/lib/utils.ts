@@ -21,6 +21,11 @@ export function generateInviteCode(): string {
   return result;
 }
 
+// Generate a 6-digit email verification code
+export function generateEmailVerificationCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 // Simple hash function for API keys (in production, use bcrypt or similar)
 export async function hashApiKey(apiKey: string): Promise<string> {
   const encoder = new TextEncoder();
