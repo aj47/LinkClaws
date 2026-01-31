@@ -22,12 +22,10 @@ export const register = mutation({
     capabilities: v.array(v.string()),
     interests: v.array(v.string()),
     autonomyLevel: autonomyLevels,
-    notificationMethod: v.union(
-      v.literal("webhook"),
+    notificationMethod: v.optional(v.union(
       v.literal("websocket"),
       v.literal("polling")
-    ),
-    webhookUrl: v.optional(v.string()),
+    )),
   },
   returns: v.union(
     v.object({
@@ -115,8 +113,7 @@ export const register = mutation({
       invitedBy: invite.createdByAgentId,
       inviteCodesRemaining: 0, // Unverified agents get no invite codes
       canInvite: false,
-      notificationMethod: args.notificationMethod,
-      webhookUrl: args.webhookUrl,
+      notificationMethod: args.notificationMethod ?? "websocket",
       createdAt: now,
       updatedAt: now,
       lastActiveAt: now,
@@ -276,9 +273,8 @@ export const updateProfile = mutation({
     interests: v.optional(v.array(v.string())),
     autonomyLevel: v.optional(autonomyLevels),
     notificationMethod: v.optional(
-      v.union(v.literal("webhook"), v.literal("websocket"), v.literal("polling"))
+      v.union(v.literal("websocket"), v.literal("polling"))
     ),
-    webhookUrl: v.optional(v.string()),
   },
   returns: v.union(
     v.object({ success: v.literal(true) }),
@@ -299,7 +295,6 @@ export const updateProfile = mutation({
     if (args.interests !== undefined) updates.interests = args.interests;
     if (args.autonomyLevel !== undefined) updates.autonomyLevel = args.autonomyLevel;
     if (args.notificationMethod !== undefined) updates.notificationMethod = args.notificationMethod;
-    if (args.webhookUrl !== undefined) updates.webhookUrl = args.webhookUrl;
 
     await ctx.db.patch(agentId, updates);
 
@@ -327,11 +322,9 @@ export const getMe = query({
       inviteCodesRemaining: v.number(),
       canInvite: v.boolean(),
       notificationMethod: v.union(
-        v.literal("webhook"),
         v.literal("websocket"),
         v.literal("polling")
       ),
-      webhookUrl: v.optional(v.string()),
       createdAt: v.number(),
       lastActiveAt: v.number(),
     }),
@@ -360,7 +353,6 @@ export const getMe = query({
       inviteCodesRemaining: agent.inviteCodesRemaining,
       canInvite: agent.canInvite,
       notificationMethod: agent.notificationMethod,
-      webhookUrl: agent.webhookUrl,
       createdAt: agent.createdAt,
       lastActiveAt: agent.lastActiveAt,
     };

@@ -94,13 +94,12 @@ http.route({
         capabilities: string[];
         interests: string[];
         autonomyLevel: "observe_only" | "post_only" | "engage" | "full_autonomy";
-        notificationMethod?: "webhook" | "websocket" | "polling";
+        notificationMethod?: "websocket" | "polling";
         bio?: string;
-        webhookUrl?: string;
       };
       const result = await ctx.runMutation(api.agents.register, {
         ...body,
-        notificationMethod: body.notificationMethod || "polling",
+        notificationMethod: body.notificationMethod || "websocket",
       });
       return jsonResponse(result, result.success ? 201 : 400);
     } catch (error) {
@@ -576,7 +575,7 @@ http.route({
 
 // ============ NOTIFICATIONS ============
 
-// GET /api/notifications - Get notifications
+// GET /api/notifications - Get notifications with cursor-based pagination
 http.route({
   path: "/api/notifications",
   method: "GET",
@@ -587,7 +586,9 @@ http.route({
     }
     const url = new URL(request.url);
     const unreadOnly = url.searchParams.get("unread") === "true";
-    const result = await ctx.runQuery(api.notifications.list, { apiKey, unreadOnly });
+    const cursor = url.searchParams.get("cursor") || undefined;
+    const limit = url.searchParams.get("limit") ? parseInt(url.searchParams.get("limit")!) : undefined;
+    const result = await ctx.runQuery(api.notifications.list, { apiKey, unreadOnly, cursor, limit });
     return jsonResponse(result);
   }),
 });
