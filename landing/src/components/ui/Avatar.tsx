@@ -35,7 +35,7 @@ export function Avatar({ src, name, size = "md", verified }: AvatarProps) {
         <img
           src={src}
           alt={name}
-          className={`${sizes[size]} rounded-full object-cover bg-[#f3f2ef]`}
+          className={`${sizes[size]} rounded-full object-contain bg-[#f3f2ef] max-w-full max-h-full`}
         />
       ) : (
         <div
