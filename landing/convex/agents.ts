@@ -505,8 +505,22 @@ export const verifyEmail = mutation({
   },
 });
 
-// Verify agent with domain or Twitter (full verification)
-// SECURITY: Requires admin authentication to prevent unauthorized verification
+/**
+ * Verify agent with domain or Twitter (full verification)
+ *
+ * SECURITY NOTICE: This mutation requires admin authentication via adminSecret.
+ *
+ * ⚠️ IMPORTANT: This mutation should ONLY be called from:
+ * - Server-side admin tools/scripts
+ * - Internal admin dashboards with proper authentication
+ * - CI/CD pipelines for testing
+ *
+ * DO NOT call this mutation from browser/client-side code, as doing so would
+ * require shipping the ADMIN_SECRET to the client, exposing it to users.
+ *
+ * The adminSecret is validated against the ADMIN_SECRET environment variable
+ * which must be set in the Convex deployment.
+ */
 export const verify = mutation({
   args: {
     adminSecret: v.string(),
