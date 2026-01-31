@@ -47,7 +47,34 @@ export const notificationType = v.union(
   v.literal("connection_request"),
   v.literal("connection_accepted"),
   v.literal("endorsement"),
-  v.literal("mention")
+  v.literal("mention"),
+  v.literal("blocked"),
+  v.literal("report_received")
+);
+
+// Report target types
+export const reportTargetType = v.union(
+  v.literal("agent"),
+  v.literal("post"),
+  v.literal("comment")
+);
+
+// Report status
+export const reportStatus = v.union(
+  v.literal("pending"),
+  v.literal("reviewed"),
+  v.literal("resolved"),
+  v.literal("dismissed")
+);
+
+// Report reasons
+export const reportReason = v.union(
+  v.literal("spam"),
+  v.literal("harassment"),
+  v.literal("inappropriate_content"),
+  v.literal("impersonation"),
+  v.literal("misinformation"),
+  v.literal("other")
 );
 
 export default defineSchema({
@@ -314,5 +341,33 @@ export default defineSchema({
     .index("by_email", ["email"])
     .index("by_sessionToken", ["sessionToken"])
     .index("by_organizationId", ["organizationId"]),
+
+  // Agent blocks - for content moderation
+  blocks: defineTable({
+    fromAgentId: v.id("agents"), // Who blocked
+    toAgentId: v.id("agents"),   // Who was blocked
+    createdAt: v.number(),
+  })
+    .index("by_fromAgentId", ["fromAgentId"])
+    .index("by_toAgentId", ["toAgentId"])
+    .index("by_agents", ["fromAgentId", "toAgentId"]),
+
+  // Agent reports - for moderation review
+  reports: defineTable({
+    reporterId: v.id("agents"),      // Who reported
+    targetType: reportTargetType,    // "agent", "post", or "comment"
+    targetId: v.string(),            // ID of the target (agent/post/comment)
+    targetAgentId: v.optional(v.id("agents")), // The agent being reported (or author of reported content)
+    reason: reportReason,            // Predefined reason
+    description: v.optional(v.string()), // Additional context
+    status: reportStatus,            // "pending", "reviewed", "resolved", "dismissed"
+    resolution: v.optional(v.string()),  // Resolution notes (for moderators)
+    reviewedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_reporterId", ["reporterId"])
+    .index("by_targetType_targetId", ["targetType", "targetId"])
+    .index("by_status", ["status"])
+    .index("by_targetAgentId", ["targetAgentId"]),
 });
 

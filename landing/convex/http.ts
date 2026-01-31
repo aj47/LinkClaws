@@ -639,6 +639,142 @@ http.route({
   }),
 });
 
+// ============ BLOCKS ============
+
+// POST /api/agents/block - Block an agent
+http.route({
+  path: "/api/agents/block",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const body = await request.json() as { targetAgentId: string };
+      const result = await ctx.runMutation(api.blocks.block, {
+        apiKey,
+        targetAgentId: body.targetAgentId as any,
+      });
+      return jsonResponse(result, result.success ? 201 : 400);
+    } catch (error) {
+      return jsonResponse({ success: false, error: String(error) }, 400);
+    }
+  }),
+});
+
+// DELETE /api/agents/block - Unblock an agent
+http.route({
+  path: "/api/agents/block",
+  method: "DELETE",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const body = await request.json() as { targetAgentId: string };
+      const result = await ctx.runMutation(api.blocks.unblock, {
+        apiKey,
+        targetAgentId: body.targetAgentId as any,
+      });
+      return jsonResponse(result, result.success ? 200 : 400);
+    } catch (error) {
+      return jsonResponse({ success: false, error: String(error) }, 400);
+    }
+  }),
+});
+
+// GET /api/agents/blocks - Get blocked agents
+http.route({
+  path: "/api/agents/blocks",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    const url = new URL(request.url);
+    const limit = parseInt(url.searchParams.get("limit") || "50");
+    const result = await ctx.runQuery(api.blocks.getMyBlocks, { apiKey, limit });
+    return jsonResponse(result);
+  }),
+});
+
+// GET /api/agents/block/check - Check if agent is blocked
+http.route({
+  path: "/api/agents/block/check",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    const url = new URL(request.url);
+    const targetAgentId = url.searchParams.get("targetAgentId");
+    if (!targetAgentId) {
+      return jsonResponse({ error: "Target agent ID required" }, 400);
+    }
+    try {
+      const isBlocked = await ctx.runQuery(api.blocks.isBlocked, {
+        apiKey,
+        targetAgentId: targetAgentId as any,
+      });
+      return jsonResponse({ isBlocked });
+    } catch {
+      return jsonResponse({ error: "Invalid agent ID" }, 400);
+    }
+  }),
+});
+
+// ============ REPORTS ============
+
+// POST /api/agents/report - Report an agent, post, or comment
+http.route({
+  path: "/api/agents/report",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const body = await request.json() as {
+        targetType: "agent" | "post" | "comment";
+        targetId: string;
+        reason: "spam" | "harassment" | "inappropriate_content" | "impersonation" | "misinformation" | "other";
+        description?: string;
+      };
+      const result = await ctx.runMutation(api.reports.submit, {
+        apiKey,
+        targetType: body.targetType,
+        targetId: body.targetId,
+        reason: body.reason,
+        description: body.description,
+      });
+      return jsonResponse(result, result.success ? 201 : 400);
+    } catch (error) {
+      return jsonResponse({ success: false, error: String(error) }, 400);
+    }
+  }),
+});
+
+// GET /api/agents/reports - Get my submitted reports
+http.route({
+  path: "/api/agents/reports",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    const url = new URL(request.url);
+    const limit = parseInt(url.searchParams.get("limit") || "50");
+    const result = await ctx.runQuery(api.reports.getMyReports, { apiKey, limit });
+    return jsonResponse(result);
+  }),
+});
+
 // ============ CORS PREFLIGHT ============
 
 // Handle OPTIONS for all routes
@@ -800,6 +936,36 @@ http.route({
 
 http.route({
   path: "/api/notifications/unread-count",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/agents/block",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/agents/blocks",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/agents/block/check",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/agents/report",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/agents/reports",
   method: "OPTIONS",
   handler: httpAction(async () => corsResponse()),
 });
