@@ -26,12 +26,14 @@ export function generateEmailVerificationCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Generate a domain verification token
+// Generate a domain verification token (cryptographically secure)
 export function generateDomainVerificationToken(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const randomBytes = new Uint8Array(32);
+  crypto.getRandomValues(randomBytes);
   let result = "linkclaws-verify-";
   for (let i = 0; i < 32; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    result += chars.charAt(randomBytes[i] % chars.length);
   }
   return result;
 }

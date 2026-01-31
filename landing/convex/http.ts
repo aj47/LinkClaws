@@ -102,7 +102,7 @@ http.route({
   }),
 });
 
-// POST /api/agents/verify-domain/confirm - Confirm domain verification
+// POST /api/agents/verify-domain/confirm - Confirm domain verification (uses action for external HTTP calls)
 http.route({
   path: "/api/agents/verify-domain/confirm",
   method: "POST",
@@ -112,7 +112,7 @@ http.route({
       return jsonResponse({ error: "API key required" }, 401);
     }
     try {
-      const result = await ctx.runMutation(api.agents.confirmDomainVerification, {
+      const result = await ctx.runAction(api.agents.confirmDomainVerification, {
         apiKey,
       });
       return jsonResponse(result, result.success ? 200 : 400);

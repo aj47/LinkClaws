@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, action, internalMutation, internalQuery } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import {
   generateApiKey,
@@ -9,6 +10,7 @@ import {
   generateEmailVerificationCode,
   generateDomainVerificationToken,
   isValidDomain,
+  checkRateLimit,
 } from "./lib/utils";
 import { autonomyLevels, verificationType, verificationTier } from "./schema";
 
@@ -558,6 +560,9 @@ export const updateLastActive = mutation({
   },
 });
 
+// Rate limit: 1 domain verification request per 5 minutes per agent
+const DOMAIN_VERIFICATION_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
+
 // Request domain verification - generates a verification token
 export const requestDomainVerification = mutation({
   args: {
@@ -585,6 +590,12 @@ export const requestDomainVerification = mutation({
     const agent = await ctx.db.get(agentId);
     if (!agent) {
       return { success: false as const, error: "Agent not found" };
+    }
+
+    // Rate limiting: 1 request per 5 minutes
+    const rateLimitKey = `domain_verify_request:${agentId}`;
+    if (!checkRateLimit(rateLimitKey, 1, DOMAIN_VERIFICATION_RATE_LIMIT_WINDOW_MS)) {
+      return { success: false as const, error: "Rate limit exceeded. Please wait 5 minutes between verification requests." };
     }
 
     // Check if already fully verified
@@ -625,13 +636,16 @@ export const requestDomainVerification = mutation({
   },
 });
 
-// Confirm domain verification - validates DNS TXT record or meta tag
-export const confirmDomainVerification = mutation({
-  args: {
-    apiKey: v.string(),
-  },
+// Internal query to get agent's pending domain verification data
+export const getDomainVerificationData = internalQuery({
+  args: { apiKey: v.string() },
   returns: v.union(
-    v.object({ success: v.literal(true), tier: verificationTier, domain: v.string() }),
+    v.object({
+      success: v.literal(true),
+      agentId: v.id("agents"),
+      domain: v.string(),
+      token: v.string(),
+    }),
     v.object({ success: v.literal(false), error: v.string() })
   ),
   handler: async (ctx, args) => {
@@ -645,37 +659,120 @@ export const confirmDomainVerification = mutation({
       return { success: false as const, error: "Agent not found" };
     }
 
-    // Check if verification was requested
     if (!agent.domainVerificationDomain || !agent.domainVerificationToken) {
       return { success: false as const, error: "No domain verification pending. Call /api/agents/verify-domain/request first." };
     }
 
-    // Check if verification has expired
     if (agent.domainVerificationExpiresAt && agent.domainVerificationExpiresAt < Date.now()) {
       return { success: false as const, error: "Domain verification has expired. Please request a new verification." };
     }
 
-    const domain = agent.domainVerificationDomain;
-    const expectedToken = agent.domainVerificationToken;
+    return {
+      success: true as const,
+      agentId,
+      domain: agent.domainVerificationDomain,
+      token: agent.domainVerificationToken,
+    };
+  },
+});
+
+// Internal mutation to complete domain verification (called by action after external validation)
+export const completeDomainVerification = internalMutation({
+  args: {
+    agentId: v.id("agents"),
+    domain: v.string(),
+    verificationMethod: v.string(),
+  },
+  returns: v.object({ success: v.literal(true), tier: verificationTier, domain: v.string() }),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    await ctx.db.patch(args.agentId, {
+      verified: true,
+      verificationType: "domain",
+      verificationData: args.domain,
+      verificationTier: "verified",
+      domainVerificationDomain: undefined,
+      domainVerificationToken: undefined,
+      domainVerificationExpiresAt: undefined,
+      inviteCodesRemaining: 3,
+      canInvite: true,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("activityLog", {
+      agentId: args.agentId,
+      action: "domain_verified",
+      description: `Domain ${args.domain} verified via ${args.verificationMethod}, upgraded to verified tier`,
+      requiresApproval: false,
+      createdAt: now,
+    });
+
+    return { success: true as const, tier: "verified" as const, domain: args.domain };
+  },
+});
+
+// Helper function to extract verification token from meta tags (handles attribute order variations)
+function extractMetaVerificationToken(html: string): string | null {
+  // Match meta tags with linkclaws-verification, handling:
+  // - Attributes in any order
+  // - Self-closing tags
+  // - Various quote styles
+  const patterns = [
+    /<meta\s+name=["']linkclaws-verification["']\s+content=["']([^"']+)["'][^>]*\/?>/i,
+    /<meta\s+content=["']([^"']+)["']\s+name=["']linkclaws-verification["'][^>]*\/?>/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  return null;
+}
+
+// Confirm domain verification - action that performs external HTTP calls
+export const confirmDomainVerification = action({
+  args: {
+    apiKey: v.string(),
+  },
+  returns: v.union(
+    v.object({ success: v.literal(true), tier: verificationTier, domain: v.string() }),
+    v.object({ success: v.literal(false), error: v.string() })
+  ),
+  handler: async (ctx, args): Promise<{ success: true; tier: "unverified" | "email" | "verified"; domain: string } | { success: false; error: string }> => {
+    // Rate limiting for confirm requests (1 per minute)
+    const rateLimitKey = `domain_verify_confirm:${args.apiKey.substring(0, 11)}`;
+    if (!checkRateLimit(rateLimitKey, 1, 60 * 1000)) {
+      return { success: false as const, error: "Rate limit exceeded. Please wait 1 minute between verification attempts." };
+    }
+
+    // Get verification data from database
+    const verificationData = await ctx.runQuery(internal.agents.getDomainVerificationData, {
+      apiKey: args.apiKey,
+    });
+
+    if (!verificationData.success) {
+      return { success: false as const, error: verificationData.error };
+    }
+
+    const { agentId, domain, token: expectedToken } = verificationData;
 
     // Try to verify via DNS TXT record
     let verified = false;
     let verificationMethod = "";
 
     try {
-      // Use DNS-over-HTTPS to check TXT record
       const dnsResponse = await fetch(
         `https://cloudflare-dns.com/dns-query?name=_linkclaws.${domain}&type=TXT`,
-        {
-          headers: { Accept: "application/dns-json" },
-        }
+        { headers: { Accept: "application/dns-json" } }
       );
 
       if (dnsResponse.ok) {
         const dnsData = await dnsResponse.json() as { Answer?: Array<{ data: string }> };
         if (dnsData.Answer) {
           for (const answer of dnsData.Answer) {
-            // TXT record data comes wrapped in quotes
             const txtValue = answer.data.replace(/^"|"$/g, "");
             if (txtValue === expectedToken) {
               verified = true;
@@ -686,7 +783,7 @@ export const confirmDomainVerification = mutation({
         }
       }
     } catch {
-      // DNS check failed, continue to try meta tag verification
+      // DNS check failed, continue to meta tag verification
     }
 
     // If DNS didn't work, try meta tag verification
@@ -698,10 +795,8 @@ export const confirmDomainVerification = mutation({
 
         if (pageResponse.ok) {
           const html = await pageResponse.text();
-          // Look for meta tag: <meta name="linkclaws-verification" content="TOKEN">
-          const metaRegex = /<meta\s+name=["']linkclaws-verification["']\s+content=["']([^"']+)["']/i;
-          const match = html.match(metaRegex);
-          if (match && match[1] === expectedToken) {
+          const foundToken = extractMetaVerificationToken(html);
+          if (foundToken === expectedToken) {
             verified = true;
             verificationMethod = "meta";
           }
@@ -718,34 +813,14 @@ export const confirmDomainVerification = mutation({
       };
     }
 
-    const now = Date.now();
-
-    // Mark agent as fully verified
-    await ctx.db.patch(agentId, {
-      verified: true,
-      verificationType: "domain",
-      verificationData: domain,
-      verificationTier: "verified",
-      // Clear verification challenge data
-      domainVerificationDomain: undefined,
-      domainVerificationToken: undefined,
-      domainVerificationExpiresAt: undefined,
-      // Grant invite codes to fully verified agents
-      inviteCodesRemaining: 3,
-      canInvite: true,
-      updatedAt: now,
-    });
-
-    // Log activity
-    await ctx.db.insert("activityLog", {
+    // Complete verification via internal mutation
+    const result = await ctx.runMutation(internal.agents.completeDomainVerification, {
       agentId,
-      action: "domain_verified",
-      description: `Domain ${domain} verified via ${verificationMethod}, upgraded to verified tier`,
-      requiresApproval: false,
-      createdAt: now,
+      domain,
+      verificationMethod,
     });
 
-    return { success: true as const, tier: "verified" as const, domain };
+    return result;
   },
 });
 
