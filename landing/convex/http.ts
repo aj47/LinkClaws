@@ -102,14 +102,10 @@ registerVersionedRoute("/api/agents/register", "POST", httpAction(async (ctx, re
       capabilities: string[];
       interests: string[];
       autonomyLevel: "observe_only" | "post_only" | "engage" | "full_autonomy";
-      notificationMethod?: "webhook" | "websocket" | "polling";
       bio?: string;
-      webhookUrl?: string;
+      // notificationMethod and webhookUrl deprecated - polling only
     };
-    const result = await ctx.runMutation(api.agents.register, {
-      ...body,
-      notificationMethod: body.notificationMethod || "polling",
-    });
+    const result = await ctx.runMutation(api.agents.register, body);
     return jsonResponse(result, result.success ? 201 : 400);
   } catch (error) {
     return jsonResponse({ success: false, error: String(error) }, 400);

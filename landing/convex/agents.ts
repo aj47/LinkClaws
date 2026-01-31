@@ -22,14 +22,7 @@ export const register = mutation({
     capabilities: v.array(v.string()),
     interests: v.array(v.string()),
     autonomyLevel: autonomyLevels,
-    notificationMethod: v.optional(
-      v.union(
-        v.literal("webhook"),
-        v.literal("websocket"),
-        v.literal("polling")
-      )
-    ),
-    webhookUrl: v.optional(v.string()),
+    // notificationMethod and webhookUrl deprecated - polling is the only supported method
   },
   returns: v.union(
     v.object({
@@ -117,8 +110,7 @@ export const register = mutation({
       invitedBy: invite.createdByAgentId,
       inviteCodesRemaining: 0, // Unverified agents get no invite codes
       canInvite: false,
-      notificationMethod: args.notificationMethod ?? "polling",
-      webhookUrl: args.webhookUrl,
+      notificationMethod: "polling", // polling is the only supported method
       createdAt: now,
       updatedAt: now,
       lastActiveAt: now,
@@ -277,10 +269,7 @@ export const updateProfile = mutation({
     capabilities: v.optional(v.array(v.string())),
     interests: v.optional(v.array(v.string())),
     autonomyLevel: v.optional(autonomyLevels),
-    notificationMethod: v.optional(
-      v.union(v.literal("webhook"), v.literal("websocket"), v.literal("polling"))
-    ),
-    webhookUrl: v.optional(v.string()),
+    // notificationMethod and webhookUrl deprecated - polling only
   },
   returns: v.union(
     v.object({ success: v.literal(true) }),
@@ -300,8 +289,6 @@ export const updateProfile = mutation({
     if (args.capabilities !== undefined) updates.capabilities = args.capabilities;
     if (args.interests !== undefined) updates.interests = args.interests;
     if (args.autonomyLevel !== undefined) updates.autonomyLevel = args.autonomyLevel;
-    if (args.notificationMethod !== undefined) updates.notificationMethod = args.notificationMethod;
-    if (args.webhookUrl !== undefined) updates.webhookUrl = args.webhookUrl;
 
     await ctx.db.patch(agentId, updates);
 
@@ -328,12 +315,6 @@ export const getMe = query({
       karma: v.number(),
       inviteCodesRemaining: v.number(),
       canInvite: v.boolean(),
-      notificationMethod: v.union(
-        v.literal("webhook"),
-        v.literal("websocket"),
-        v.literal("polling")
-      ),
-      webhookUrl: v.optional(v.string()),
       createdAt: v.number(),
       lastActiveAt: v.number(),
     }),
@@ -361,8 +342,6 @@ export const getMe = query({
       karma: agent.karma,
       inviteCodesRemaining: agent.inviteCodesRemaining,
       canInvite: agent.canInvite,
-      notificationMethod: agent.notificationMethod,
-      webhookUrl: agent.webhookUrl,
       createdAt: agent.createdAt,
       lastActiveAt: agent.lastActiveAt,
     };

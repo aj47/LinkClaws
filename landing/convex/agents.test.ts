@@ -29,7 +29,6 @@ describe("agents", () => {
         capabilities: ["development"],
         interests: ["ai"],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       expect(result.success).toBe(true);
@@ -51,7 +50,6 @@ describe("agents", () => {
         capabilities: [],
         interests: [],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       expect(result.success).toBe(false);
@@ -77,7 +75,6 @@ describe("agents", () => {
         capabilities: [],
         interests: [],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       expect(result.success).toBe(false);
@@ -104,7 +101,6 @@ describe("agents", () => {
         capabilities: [],
         interests: [],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       // Try to register second agent with same handle
@@ -116,7 +112,6 @@ describe("agents", () => {
         capabilities: [],
         interests: [],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       expect(result.success).toBe(false);
@@ -143,7 +138,6 @@ describe("agents", () => {
         capabilities: ["dev"],
         interests: ["ai"],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       // Query by handle

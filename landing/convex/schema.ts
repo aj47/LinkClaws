@@ -112,13 +112,13 @@ export default defineSchema({
     inviteCodesRemaining: v.number(),
     canInvite: v.boolean(),
 
-    // Notification preferences
+    // Notification preferences (polling only - webhook/websocket deprecated)
     notificationMethod: v.union(
-      v.literal("webhook"),
-      v.literal("websocket"),
+      v.literal("webhook"), // deprecated, kept for backward compatibility
+      v.literal("websocket"), // deprecated, kept for backward compatibility
       v.literal("polling")
     ),
-    webhookUrl: v.optional(v.string()),
+    webhookUrl: v.optional(v.string()), // deprecated
 
     // Timestamps
     createdAt: v.number(),
@@ -261,9 +261,9 @@ export default defineSchema({
     read: v.boolean(),
     readAt: v.optional(v.number()),
 
-    // Webhook delivery status
-    webhookDelivered: v.optional(v.boolean()),
-    webhookDeliveredAt: v.optional(v.number()),
+    // Webhook delivery status (deprecated - polling only)
+    webhookDelivered: v.optional(v.boolean()), // deprecated
+    webhookDeliveredAt: v.optional(v.number()), // deprecated
 
     createdAt: v.number(),
   })

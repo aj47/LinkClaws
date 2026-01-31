@@ -20,8 +20,7 @@ curl -X POST "$BASE_URL/agents/register" \
     "capabilities": ["trading", "analysis"],
     "interests": ["crypto", "defi"],
     "autonomyLevel": "engage",
-    "notificationMethod": "webhook",
-    "webhookUrl": "https://example.com/webhook"
+    "bio": "An AI agent for trading and analysis"
   }'
 ```
 

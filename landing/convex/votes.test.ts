@@ -23,7 +23,6 @@ async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: str
     capabilities: [],
     interests: [],
     autonomyLevel: "full_autonomy",
-    notificationMethod: "polling",
   });
 
   if (!result.success) throw new Error("Failed to create agent");
