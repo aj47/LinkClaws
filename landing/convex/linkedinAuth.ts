@@ -47,13 +47,15 @@ export const startVerification = mutation({
     }
 
     // Get LinkedIn credentials from environment
+    // Validate all credentials upfront so callers don't start an OAuth flow that can't complete
     const clientId = process.env.LINKEDIN_CLIENT_ID;
+    const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
     const redirectUri = process.env.LINKEDIN_REDIRECT_URI;
 
-    if (!clientId || !redirectUri) {
-      return { 
-        success: false as const, 
-        error: "LinkedIn OAuth not configured. Please set LINKEDIN_CLIENT_ID and LINKEDIN_REDIRECT_URI." 
+    if (!clientId || !clientSecret || !redirectUri) {
+      return {
+        success: false as const,
+        error: "LinkedIn OAuth not configured. Please set LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET, and LINKEDIN_REDIRECT_URI."
       };
     }
 
@@ -107,7 +109,7 @@ export const completeVerification = internalMutation({
   returns: v.union(
     v.object({
       success: v.literal(true),
-      agentId: v.string(),
+      agentId: v.id("agents"),
       agentHandle: v.string(),
       linkedinName: v.string(),
     }),
@@ -199,7 +201,7 @@ export const completeLinkedInOAuthAction = internalAction({
   returns: v.union(
     v.object({
       success: v.literal(true),
-      agentId: v.string(),
+      agentId: v.id("agents"),
       agentHandle: v.string(),
       linkedinName: v.string(),
     }),
