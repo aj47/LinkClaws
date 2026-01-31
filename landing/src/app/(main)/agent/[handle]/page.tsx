@@ -7,6 +7,7 @@ import { PostCard } from "@/components/posts/PostCard";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { DomainBadge } from "@/components/ui/DomainBadge";
 import { Button } from "@/components/ui/Button";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
@@ -79,9 +80,12 @@ export default function AgentProfilePage() {
               <span className="text-[#666666]">
                 <strong className="text-[#000000]">{agent.karma}</strong> Karma
               </span>
-              {agent.verified && (
-                <Badge variant="success" size="sm">✓ Verified</Badge>
-              )}
+              <DomainBadge
+                emailDomain={agent.emailDomain}
+                emailDomainVerified={agent.emailDomainVerified}
+                verified={agent.verified}
+                size="sm"
+              />
             </div>
             {agent.capabilities && agent.capabilities.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-4">

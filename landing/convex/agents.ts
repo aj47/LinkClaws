@@ -8,7 +8,8 @@ import {
   verifyApiKey,
   generateEmailVerificationCode,
 } from "./lib/utils";
-import { autonomyLevels, verificationType, verificationTier } from "./schema";
+import { extractEmailDomain, classifyEmailDomain } from "./lib/emailDomains";
+import { autonomyLevels, verificationType, verificationTier, emailVerificationType } from "./schema";
 
 // Register a new agent
 export const register = mutation({
@@ -151,6 +152,9 @@ const publicAgentType = v.object({
   verified: v.boolean(),
   verificationType: verificationType,
   verificationTier: verificationTier,
+  // Email domain verification (for domain badges)
+  emailDomain: v.optional(v.string()),
+  emailDomainVerified: v.optional(v.boolean()),
   capabilities: v.array(v.string()),
   interests: v.array(v.string()),
   karma: v.number(),
@@ -167,8 +171,10 @@ function formatPublicAgent(agent: {
   bio?: string;
   avatarUrl?: string;
   verified: boolean;
-  verificationType: "none" | "email" | "twitter" | "domain";
+  verificationType: "none" | "email" | "email_domain" | "twitter" | "domain";
   verificationTier?: "unverified" | "email" | "verified";
+  emailDomain?: string;
+  emailDomainVerified?: boolean;
   capabilities: string[];
   interests: string[];
   karma: number;
@@ -187,6 +193,8 @@ function formatPublicAgent(agent: {
     verified: agent.verified,
     verificationType: agent.verificationType,
     verificationTier: tier,
+    emailDomain: agent.emailDomain,
+    emailDomainVerified: agent.emailDomainVerified,
     capabilities: agent.capabilities,
     interests: agent.interests,
     karma: agent.karma,
@@ -309,6 +317,11 @@ export const getMe = query({
       avatarUrl: v.optional(v.string()),
       verified: v.boolean(),
       verificationType: verificationType,
+      verificationTier: verificationTier,
+      // Email domain verification
+      emailDomain: v.optional(v.string()),
+      emailDomainVerified: v.optional(v.boolean()),
+      emailVerified: v.optional(v.boolean()),
       capabilities: v.array(v.string()),
       interests: v.array(v.string()),
       autonomyLevel: autonomyLevels,
@@ -327,6 +340,9 @@ export const getMe = query({
     const agent = await ctx.db.get(agentId);
     if (!agent) return null;
 
+    // Default verificationTier based on existing verified status for legacy data
+    const tier = agent.verificationTier ?? (agent.verified ? "verified" : "unverified");
+
     return {
       _id: agent._id,
       name: agent.name,
@@ -336,6 +352,10 @@ export const getMe = query({
       avatarUrl: agent.avatarUrl,
       verified: agent.verified,
       verificationType: agent.verificationType,
+      verificationTier: tier,
+      emailDomain: agent.emailDomain,
+      emailDomainVerified: agent.emailDomainVerified,
+      emailVerified: agent.emailVerified,
       capabilities: agent.capabilities,
       interests: agent.interests,
       autonomyLevel: agent.autonomyLevel,
@@ -388,7 +408,12 @@ export const requestEmailVerification = mutation({
     email: v.string(),
   },
   returns: v.union(
-    v.object({ success: v.literal(true), message: v.string() }),
+    v.object({
+      success: v.literal(true),
+      message: v.string(),
+      emailType: v.union(v.literal("personal"), v.literal("work")),
+      domain: v.string(),
+    }),
     v.object({ success: v.literal(false), error: v.string() })
   ),
   handler: async (ctx, args) => {
@@ -407,6 +432,13 @@ export const requestEmailVerification = mutation({
       return { success: false as const, error: "Email already verified" };
     }
 
+    // Extract and classify domain
+    const domain = extractEmailDomain(args.email);
+    if (!domain) {
+      return { success: false as const, error: "Invalid email address" };
+    }
+    const emailType = classifyEmailDomain(args.email);
+
     const now = Date.now();
     const verificationCode = generateEmailVerificationCode();
     const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours
@@ -423,6 +455,8 @@ export const requestEmailVerification = mutation({
     return {
       success: true as const,
       message: `Verification code sent to ${args.email}. Code: ${verificationCode} (dev mode)`,
+      emailType,
+      domain,
     };
   },
 });
@@ -434,7 +468,12 @@ export const verifyEmail = mutation({
     code: v.string(),
   },
   returns: v.union(
-    v.object({ success: v.literal(true), tier: verificationTier }),
+    v.object({
+      success: v.literal(true),
+      tier: verificationTier,
+      emailType: v.union(v.literal("personal"), v.literal("work")),
+      domain: v.string(),
+    }),
     v.object({ success: v.literal(false), error: v.string() })
   ),
   handler: async (ctx, args) => {
@@ -463,26 +502,56 @@ export const verifyEmail = mutation({
       return { success: false as const, error: "Verification code expired" };
     }
 
+    // Extract and classify domain
+    const email = agent.email;
+    if (!email) {
+      return { success: false as const, error: "No email on record" };
+    }
+    const domain = extractEmailDomain(email);
+    if (!domain) {
+      return { success: false as const, error: "Invalid email address" };
+    }
+    const emailType = classifyEmailDomain(email);
+    const isWorkDomain = emailType === "work";
+
     const now = Date.now();
 
-    // Upgrade to email tier
+    // Upgrade based on domain type:
+    // - Work domain: verified tier (full features)
+    // - Personal domain: email tier (basic posting)
     await ctx.db.patch(agentId, {
       emailVerified: true,
-      verificationTier: "email",
-      verificationType: "email",
+      emailDomain: domain,
+      emailDomainVerified: isWorkDomain,
+      emailVerificationType: emailType,
+      verificationTier: isWorkDomain ? "verified" : "email",
+      verificationType: isWorkDomain ? "email_domain" : "email",
+      verified: isWorkDomain,
       updatedAt: now,
+      // Grant invite codes to work domain users
+      ...(isWorkDomain && {
+        inviteCodesRemaining: Math.max(agent.inviteCodesRemaining ?? 0, 3),
+        canInvite: true,
+      }),
     });
 
     // Log activity
     await ctx.db.insert("activityLog", {
       agentId,
       action: "email_verified",
-      description: "Email verified, upgraded to email tier",
+      description: isWorkDomain
+        ? `Work email verified (@${domain}), upgraded to verified tier`
+        : "Personal email verified, upgraded to email tier",
       requiresApproval: false,
       createdAt: now,
     });
 
-    return { success: true as const, tier: "email" as const };
+    return {
+      success: true as const,
+      tier: isWorkDomain ? "verified" as const : "email" as const,
+      emailType,
+      domain,
+    };
   },
 });
 

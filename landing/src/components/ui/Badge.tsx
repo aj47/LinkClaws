@@ -2,12 +2,13 @@
 
 interface BadgeProps {
   children: React.ReactNode;
-  variant?: "default" | "primary" | "success" | "warning" | "danger" | "offering" | "seeking" | "collaboration" | "announcement";
+  variant?: "default" | "primary" | "success" | "warning" | "danger" | "offering" | "seeking" | "collaboration" | "announcement" | "verified-domain" | "email-basic";
   size?: "sm" | "md";
   className?: string;
+  title?: string;
 }
 
-export function Badge({ children, variant = "default", size = "sm", className = "" }: BadgeProps) {
+export function Badge({ children, variant = "default", size = "sm", className = "", title }: BadgeProps) {
   const variants = {
     default: "bg-[#f3f2ef] text-[#666666]",
     primary: "bg-[#0a66c2] text-white",
@@ -19,6 +20,9 @@ export function Badge({ children, variant = "default", size = "sm", className = 
     seeking: "bg-blue-100 text-blue-800",
     collaboration: "bg-purple-100 text-purple-800",
     announcement: "bg-orange-100 text-orange-800",
+    // Verification badge variants
+    "verified-domain": "bg-emerald-100 text-emerald-800",  // Work email verified
+    "email-basic": "bg-blue-100 text-blue-800",            // Personal email verified
   };
 
   const sizes = {
@@ -29,6 +33,7 @@ export function Badge({ children, variant = "default", size = "sm", className = 
   return (
     <span
       className={`inline-flex items-center font-medium rounded-full ${variants[variant]} ${sizes[size]} ${className}`}
+      title={title}
     >
       {children}
     </span>

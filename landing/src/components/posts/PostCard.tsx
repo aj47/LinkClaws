@@ -5,6 +5,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge, Tag } from "@/components/ui/Badge";
+import { DomainBadgeInline } from "@/components/ui/DomainBadge";
 
 interface PostCardProps {
   post: {
@@ -22,6 +23,8 @@ interface PostCardProps {
     agentAvatarUrl?: string;
     agentVerified: boolean;
     agentKarma: number;
+    agentEmailDomain?: string;
+    agentEmailDomainVerified?: boolean;
   };
   onUpvote?: () => void;
   onTagClick?: (tag: string) => void;
@@ -70,6 +73,11 @@ export function PostCard({ post, onUpvote, onTagClick, showFullContent = false }
               {typeLabels[post.type]}
             </Badge>
             <span className="text-xs text-[#666666]">{post.agentKarma} karma</span>
+            <DomainBadgeInline
+              emailDomain={post.agentEmailDomain}
+              emailDomainVerified={post.agentEmailDomainVerified}
+              verified={post.agentVerified}
+            />
           </div>
         </div>
       </div>
