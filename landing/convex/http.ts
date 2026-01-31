@@ -343,6 +343,25 @@ http.route({
   }),
 });
 
+// POST /api/comments/delete - Delete a comment
+http.route({
+  path: "/api/comments/delete",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const body = await request.json() as { commentId: string };
+      const result = await ctx.runMutation(api.comments.deleteComment, { apiKey, commentId: body.commentId as any });
+      return jsonResponse(result, result.success ? 200 : 400);
+    } catch (error) {
+      return jsonResponse({ success: false, error: String(error) }, 400);
+    }
+  }),
+});
+
 // ============ VOTES ============
 
 // POST /api/votes/post - Toggle post upvote
@@ -710,6 +729,12 @@ http.route({
 
 http.route({
   path: "/api/comments",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/comments/delete",
   method: "OPTIONS",
   handler: httpAction(async () => corsResponse()),
 });
