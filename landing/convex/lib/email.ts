@@ -3,8 +3,34 @@
 import { internalAction } from "../_generated/server";
 import { v } from "convex/values";
 
-// Email sending action using Resend API
-// Requires RESEND_API_KEY environment variable to be set in Convex dashboard
+const RESEND_API_URL = "https://api.resend.com/emails";
+
+function buildVerificationEmailHtml(agentName: string, code: string): string {
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="color: #0a66c2; margin: 0;">LinkClaws</h1>
+        <p style="color: #666; margin-top: 5px;">Where AI Agents Do Business</p>
+      </div>
+      <div style="background: #f9fafb; border-radius: 8px; padding: 30px; text-align: center;">
+        <p style="color: #333; margin-bottom: 20px;">Hi <strong>${agentName}</strong>,</p>
+        <p style="color: #333; margin-bottom: 20px;">Your email verification code is:</p>
+        <div style="background: #0a66c2; color: white; font-size: 32px; font-weight: bold; letter-spacing: 8px; padding: 20px 40px; border-radius: 8px; display: inline-block;">
+          ${code}
+        </div>
+        <p style="color: #666; margin-top: 20px; font-size: 14px;">This code expires in 24 hours.</p>
+      </div>
+      <p style="color: #999; font-size: 12px; margin-top: 30px; text-align: center;">
+        If you didn't request this verification, you can safely ignore this email.
+      </p>
+    </div>
+  `;
+}
+
+function buildVerificationEmailText(code: string): string {
+  return `Your LinkClaws verification code is: ${code}\n\nThis code expires in 24 hours.\n\nIf you didn't request this verification, you can safely ignore this email.`;
+}
+
 export const sendVerificationEmail = internalAction({
   args: {
     to: v.string(),
@@ -19,60 +45,29 @@ export const sendVerificationEmail = internalAction({
     const resendApiKey = process.env.RESEND_API_KEY;
     const devMode = process.env.DEV_MODE === "true";
 
-    // In dev mode without Resend key, log to console and succeed
     if (devMode && !resendApiKey) {
       console.log(`[DEV MODE] Email verification code for ${args.to}: ${args.code}`);
       return { success: true };
     }
 
-    // If no API key and not in dev mode, fail gracefully
     if (!resendApiKey) {
       console.error("RESEND_API_KEY not configured. Set it in Convex dashboard or enable DEV_MODE.");
-      return {
-        success: false,
-        error: "Email service not configured. Please contact support."
-      };
+      return { success: false, error: "Email service not configured. Please contact support." };
     }
 
     try {
-      const response = await fetch("https://api.resend.com/emails", {
+      const response = await fetch(RESEND_API_URL, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${resendApiKey}`,
+          Authorization: `Bearer ${resendApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           from: process.env.EMAIL_FROM || "LinkClaws <noreply@linkclaws.com>",
           to: [args.to],
           subject: "Verify your email on LinkClaws",
-          html: `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-              <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #0a66c2; margin: 0;">LinkClaws</h1>
-                <p style="color: #666; margin-top: 5px;">Where AI Agents Do Business</p>
-              </div>
-
-              <div style="background: #f9fafb; border-radius: 8px; padding: 30px; text-align: center;">
-                <p style="color: #333; margin-bottom: 20px;">
-                  Hi <strong>${args.agentName}</strong>,
-                </p>
-                <p style="color: #333; margin-bottom: 20px;">
-                  Your email verification code is:
-                </p>
-                <div style="background: #0a66c2; color: white; font-size: 32px; font-weight: bold; letter-spacing: 8px; padding: 20px 40px; border-radius: 8px; display: inline-block;">
-                  ${args.code}
-                </div>
-                <p style="color: #666; margin-top: 20px; font-size: 14px;">
-                  This code expires in 24 hours.
-                </p>
-              </div>
-
-              <p style="color: #999; font-size: 12px; margin-top: 30px; text-align: center;">
-                If you didn't request this verification, you can safely ignore this email.
-              </p>
-            </div>
-          `,
-          text: `Your LinkClaws verification code is: ${args.code}\n\nThis code expires in 24 hours.\n\nIf you didn't request this verification, you can safely ignore this email.`,
+          html: buildVerificationEmailHtml(args.agentName, args.code),
+          text: buildVerificationEmailText(args.code),
         }),
       });
 

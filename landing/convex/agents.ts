@@ -403,7 +403,8 @@ export const search = query({
   },
 });
 
-// Request email verification - sends verification code
+const VERIFICATION_CODE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 export const requestEmailVerification = mutation({
   args: {
     apiKey: v.string(),
@@ -424,19 +425,15 @@ export const requestEmailVerification = mutation({
       return { success: false as const, error: "Agent not found" };
     }
 
-    // Validate email format
     if (!isValidEmail(args.email)) {
       return { success: false as const, error: "Invalid email format" };
     }
 
-    // Check if email is already verified
     if (agent.emailVerified) {
       return { success: false as const, error: "Email already verified" };
     }
 
-    // Rate limit: max 3 verification requests per hour per agent
-    const rateLimitKey = `email_verify:${agentId}`;
-    if (!checkRateLimit(rateLimitKey, 3, 60 * 60 * 1000)) {
+    if (!checkRateLimit(`email_verify:${agentId}`, 3, 60 * 60 * 1000)) {
       return {
         success: false as const,
         error: "Too many verification requests. Please try again in an hour.",
@@ -445,17 +442,14 @@ export const requestEmailVerification = mutation({
 
     const now = Date.now();
     const verificationCode = generateEmailVerificationCode();
-    const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours
 
     await ctx.db.patch(agentId, {
       email: args.email,
       emailVerificationCode: verificationCode,
-      emailVerificationExpiresAt: expiresAt,
+      emailVerificationExpiresAt: now + VERIFICATION_CODE_TTL_MS,
       updatedAt: now,
     });
 
-    // Send verification email via internal action
-    // Note: The code is NEVER returned in the API response for security
     await ctx.scheduler.runAfter(0, internal.lib.email.sendVerificationEmail, {
       to: args.email,
       code: verificationCode,
@@ -469,7 +463,6 @@ export const requestEmailVerification = mutation({
   },
 });
 
-// Verify email with code
 export const verifyEmail = mutation({
   args: {
     apiKey: v.string(),
@@ -485,9 +478,7 @@ export const verifyEmail = mutation({
       return { success: false as const, error: "Invalid API key" };
     }
 
-    // Rate limit: max 5 verification attempts per 15 minutes per agent
-    const rateLimitKey = `email_verify_attempt:${agentId}`;
-    if (!checkRateLimit(rateLimitKey, 5, 15 * 60 * 1000)) {
+    if (!checkRateLimit(`email_verify_attempt:${agentId}`, 5, 15 * 60 * 1000)) {
       return {
         success: false as const,
         error: "Too many verification attempts. Please try again in 15 minutes.",
@@ -499,17 +490,14 @@ export const verifyEmail = mutation({
       return { success: false as const, error: "Agent not found" };
     }
 
-    // Check if already verified
     if (agent.emailVerified) {
       return { success: false as const, error: "Email already verified" };
     }
 
-    // Validate code
     if (agent.emailVerificationCode !== args.code) {
       return { success: false as const, error: "Invalid verification code" };
     }
 
-    // Check expiration
     if (agent.emailVerificationExpiresAt && agent.emailVerificationExpiresAt < Date.now()) {
       return { success: false as const, error: "Verification code expired" };
     }
@@ -521,7 +509,7 @@ export const verifyEmail = mutation({
       emailVerified: true,
       verificationTier: "email",
       verificationType: "email",
-      emailVerificationCode: undefined, // Clear code after successful verification
+      emailVerificationCode: undefined,
       emailVerificationExpiresAt: undefined,
       updatedAt: now,
     });
