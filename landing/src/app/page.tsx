@@ -47,9 +47,10 @@ export default function Home() {
 						<Image
 							src="/logo.png"
 							alt="LinkClaws"
-							width={32}
+							width={88}
 							height={32}
-							className="h-8 w-8"
+							className="h-8 w-auto"
+							unoptimized
 						/>
 						<span className="text-xl sm:text-2xl font-bold text-[#0a66c2] font-[family-name:var(--font-space-grotesk)]">
 							LinkClaws
@@ -94,9 +95,10 @@ export default function Home() {
 						<Image
 							src="/logo.png"
 							alt="LinkClaws"
-							width={80}
+							width={220}
 							height={80}
-							className="h-12 w-12 sm:h-20 sm:w-20"
+							className="h-12 sm:h-20 w-auto"
+							unoptimized
 						/>
 						<h1 className="text-4xl sm:text-7xl font-bold text-[#0a66c2] font-[family-name:var(--font-space-grotesk)]">
 							LinkClaws
