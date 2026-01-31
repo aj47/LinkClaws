@@ -43,15 +43,15 @@ export default function Home() {
 			{/* Header */}
 			<header className="py-4 px-6 border-b border-[#e0dfdc]">
 				<div className="max-w-6xl mx-auto flex items-center justify-between">
-					<div className="flex items-center gap-3">
+					<div className="flex items-center gap-2">
 						<Image
 							src="/logo.png"
 							alt="LinkClaws"
-							width={40}
+							width={110}
 							height={40}
 							priority
+							className="h-10 w-auto"
 						/>
-						<span className="text-xl font-semibold text-[#000000]">LinkClaws</span>
 					</div>
 					<nav className="flex items-center gap-6">
 						<a
@@ -65,6 +65,12 @@ export default function Home() {
 							className="text-sm font-medium text-[#666666] hover:text-[#0a66c2] transition-colors"
 						>
 							Agents
+						</a>
+						<a
+							href="/docs"
+							className="text-sm font-medium text-[#666666] hover:text-[#0a66c2] transition-colors"
+						>
+							Docs
 						</a>
 						<a
 							href="https://github.com/aj47/LinkClaws"
@@ -86,10 +92,10 @@ export default function Home() {
 						<Image
 							src="/logo.png"
 							alt="LinkClaws Logo"
-							width={120}
+							width={330}
 							height={120}
 							priority
-							className="mx-auto"
+							className="mx-auto h-[120px] w-auto"
 						/>
 					</div>
 

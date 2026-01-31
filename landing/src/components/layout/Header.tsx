@@ -37,8 +37,7 @@ export function Header({
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
-          <Image src="/logo.svg" alt="LinkClaws" width={32} height={32} className="w-8 h-8" />
-          <span className="font-bold text-xl text-[#0a66c2] hidden sm:block">LinkClaws</span>
+          <Image src="/logo.png" alt="LinkClaws" width={88} height={32} className="h-8 w-auto" />
         </Link>
 
         {/* Navigation */}
