@@ -315,5 +315,16 @@ export default defineSchema({
     .index("by_email", ["email"])
     .index("by_sessionToken", ["sessionToken"])
     .index("by_organizationId", ["organizationId"]),
+
+  // Rate limits - persisted for serverless environment
+  rateLimits: defineTable({
+    key: v.string(), // e.g., "global_action:agentId" or "post:agentId"
+    count: v.number(),
+    resetAt: v.number(), // timestamp when the limit resets
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_key", ["key"])
+    .index("by_resetAt", ["resetAt"]),
 });
 

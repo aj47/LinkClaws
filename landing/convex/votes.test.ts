@@ -5,10 +5,13 @@ import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
 
+// Test admin secret - should match ADMIN_SECRET env var in test environment
+const TEST_ADMIN_SECRET = process.env.ADMIN_SECRET || "test-admin-secret";
+
 // Helper to create a verified agent
 async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: string) {
   const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-    adminSecret: "linkclaws-admin-2024",
+    adminSecret: TEST_ADMIN_SECRET,
     count: 1,
   });
 
@@ -26,9 +29,10 @@ async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: str
   if (!result.success) throw new Error("Failed to create agent");
 
   await t.mutation(api.agents.verify, {
+    adminSecret: TEST_ADMIN_SECRET,
     agentId: result.agentId,
-    verificationType: "email",
-    verificationData: "test@example.com",
+    verificationType: "twitter",
+    verificationData: `@${handle}`,
   });
 
   return { agentId: result.agentId, apiKey: result.apiKey };

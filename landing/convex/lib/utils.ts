@@ -120,27 +120,50 @@ export async function isAgentVerified(
   return agent?.verified ?? false;
 }
 
-// Rate limiting helper (simple in-memory, would need Redis for production)
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+// Database-persisted rate limiting for serverless environment
+// This replaces the in-memory rate limiting which doesn't work across serverless invocations
 
-export function checkRateLimit(
+export async function checkRateLimitDb(
+  ctx: MutationCtx,
   key: string,
   maxRequests: number,
   windowMs: number
-): boolean {
+): Promise<boolean> {
   const now = Date.now();
-  const entry = rateLimitMap.get(key);
-  
+
+  const entry = await ctx.db
+    .query("rateLimits")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .first();
+
   if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+    // Create or reset the rate limit entry
+    if (entry) {
+      await ctx.db.patch(entry._id, {
+        count: 1,
+        resetAt: now + windowMs,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("rateLimits", {
+        key,
+        count: 1,
+        resetAt: now + windowMs,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
     return true;
   }
-  
+
   if (entry.count >= maxRequests) {
     return false;
   }
-  
-  entry.count++;
+
+  await ctx.db.patch(entry._id, {
+    count: entry.count + 1,
+    updatedAt: now,
+  });
   return true;
 }
 
@@ -148,26 +171,113 @@ export function checkRateLimit(
 // This is a stricter limit to prevent spam across all action types
 const GLOBAL_ACTION_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
 
-export function checkGlobalActionRateLimit(agentId: string): { allowed: boolean; retryAfterSeconds?: number } {
+export async function checkGlobalActionRateLimitDb(
+  ctx: MutationCtx,
+  agentId: string
+): Promise<{ allowed: boolean; retryAfterSeconds?: number }> {
   const key = `global_action:${agentId}`;
   const now = Date.now();
-  const entry = rateLimitMap.get(key);
-  
+
+  const entry = await ctx.db
+    .query("rateLimits")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .first();
+
   if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(key, { count: 1, resetAt: now + GLOBAL_ACTION_WINDOW_MS });
+    // Create or reset the rate limit entry
+    if (entry) {
+      await ctx.db.patch(entry._id, {
+        count: 1,
+        resetAt: now + GLOBAL_ACTION_WINDOW_MS,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("rateLimits", {
+        key,
+        count: 1,
+        resetAt: now + GLOBAL_ACTION_WINDOW_MS,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
     return { allowed: true };
   }
-  
+
   if (entry.count >= 1) {
     const retryAfterSeconds = Math.ceil((entry.resetAt - now) / 1000);
     return { allowed: false, retryAfterSeconds };
   }
-  
+
+  await ctx.db.patch(entry._id, {
+    count: entry.count + 1,
+    updatedAt: now,
+  });
+  return { allowed: true };
+}
+
+export async function getGlobalRateLimitResetTimeDb(
+  ctx: QueryCtx,
+  agentId: string
+): Promise<number | null> {
+  const key = `global_action:${agentId}`;
+  const entry = await ctx.db
+    .query("rateLimits")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .first();
+  return entry ? entry.resetAt : null;
+}
+
+// Legacy in-memory functions kept for backwards compatibility during migration
+// These should be removed after all callers are updated
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+/** @deprecated Use checkRateLimitDb instead */
+export function checkRateLimit(
+  key: string,
+  maxRequests: number,
+  windowMs: number
+): boolean {
+  console.warn("checkRateLimit is deprecated - use checkRateLimitDb for proper serverless rate limiting");
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+
+  if (entry.count >= maxRequests) {
+    return false;
+  }
+
+  entry.count++;
+  return true;
+}
+
+/** @deprecated Use checkGlobalActionRateLimitDb instead */
+export function checkGlobalActionRateLimit(agentId: string): { allowed: boolean; retryAfterSeconds?: number } {
+  console.warn("checkGlobalActionRateLimit is deprecated - use checkGlobalActionRateLimitDb for proper serverless rate limiting");
+  const key = `global_action:${agentId}`;
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + GLOBAL_ACTION_WINDOW_MS });
+    return { allowed: true };
+  }
+
+  if (entry.count >= 1) {
+    const retryAfterSeconds = Math.ceil((entry.resetAt - now) / 1000);
+    return { allowed: false, retryAfterSeconds };
+  }
+
   entry.count++;
   return { allowed: true };
 }
 
+/** @deprecated Use getGlobalRateLimitResetTimeDb instead */
 export function getGlobalRateLimitResetTime(agentId: string): number | null {
+  console.warn("getGlobalRateLimitResetTime is deprecated - use getGlobalRateLimitResetTimeDb for proper serverless rate limiting");
   const key = `global_action:${agentId}`;
   const entry = rateLimitMap.get(key);
   return entry ? entry.resetAt : null;

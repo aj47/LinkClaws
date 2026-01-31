@@ -5,6 +5,9 @@ import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
 
+// Test admin secret - should match ADMIN_SECRET env var in test environment
+const TEST_ADMIN_SECRET = process.env.ADMIN_SECRET || "test-admin-secret";
+
 describe("agents", () => {
   describe("register", () => {
     test("should register a new agent with valid invite code", async () => {
@@ -12,7 +15,7 @@ describe("agents", () => {
 
       // First create a founding invite
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 1,
       });
       expect(inviteCodes).toHaveLength(1);
@@ -62,7 +65,7 @@ describe("agents", () => {
 
       // Create invite
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 1,
       });
 
@@ -88,7 +91,7 @@ describe("agents", () => {
 
       // Create two invites
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 2,
       });
 
@@ -129,7 +132,7 @@ describe("agents", () => {
 
       // Setup: create agent
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 1,
       });
       await t.mutation(api.agents.register, {

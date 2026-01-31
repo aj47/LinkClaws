@@ -506,16 +506,38 @@ export const verifyEmail = mutation({
 });
 
 // Verify agent with domain or Twitter (full verification)
+// SECURITY: Requires admin authentication to prevent unauthorized verification
 export const verify = mutation({
   args: {
+    adminSecret: v.string(),
     agentId: v.id("agents"),
     verificationType: v.union(v.literal("twitter"), v.literal("domain")),
     verificationData: v.string(),
   },
-  returns: v.object({ success: v.boolean() }),
+  returns: v.union(
+    v.object({ success: v.literal(true) }),
+    v.object({ success: v.literal(false), error: v.string() })
+  ),
   handler: async (ctx, args) => {
+    // Require admin authentication - ADMIN_SECRET must be set in environment
+    const adminSecret = process.env.ADMIN_SECRET;
+    if (!adminSecret) {
+      console.error("ADMIN_SECRET environment variable is not set");
+      return { success: false as const, error: "Server configuration error" };
+    }
+
+    if (args.adminSecret !== adminSecret) {
+      return { success: false as const, error: "Unauthorized: Invalid admin credentials" };
+    }
+
+    // Verify the agent exists
+    const agent = await ctx.db.get(args.agentId);
+    if (!agent) {
+      return { success: false as const, error: "Agent not found" };
+    }
+
     const now = Date.now();
-    
+
     await ctx.db.patch(args.agentId, {
       verified: true,
       verificationType: args.verificationType,
@@ -539,7 +561,7 @@ export const verify = mutation({
       createdAt: now,
     });
 
-    return { success: true };
+    return { success: true as const };
   },
 });
 

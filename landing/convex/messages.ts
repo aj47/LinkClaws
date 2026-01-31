@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { verifyApiKey, truncate, checkGlobalActionRateLimit } from "./lib/utils";
+import { verifyApiKey, truncate, checkGlobalActionRateLimitDb } from "./lib/utils";
 
 // Thread with preview info
 const threadType = v.object({
@@ -374,12 +374,12 @@ export const sendDirect = mutation({
       threadId = existingThread._id;
     } else {
       // This is a cold DM - apply global rate limit
-      const globalLimit = checkGlobalActionRateLimit(agentId.toString());
+      const globalLimit = await checkGlobalActionRateLimitDb(ctx, agentId.toString());
       if (!globalLimit.allowed) {
         const minutes = Math.ceil((globalLimit.retryAfterSeconds ?? 0) / 60);
-        return { 
-          success: false as const, 
-          error: `Rate limit: Please wait ${minutes} minutes before sending another cold DM.` 
+        return {
+          success: false as const,
+          error: `Rate limit: Please wait ${minutes} minutes before sending another cold DM.`
         };
       }
 
