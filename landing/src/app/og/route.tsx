@@ -1,131 +1,45 @@
-import { ImageResponse } from 'next/og';
+import { ImageResponse } from '@cf-wasm/og';
 
 export const runtime = 'edge';
 
 export async function GET() {
+  const html = `
+    <div style="height: 100%; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, #0a66c2 0%, #004182 50%, #002d5a 100%); font-family: system-ui, sans-serif;">
+      <!-- Decorative elements -->
+      <div style="position: absolute; top: -100px; right: -100px; width: 400px; height: 400px; border-radius: 50%; background: rgba(255, 255, 255, 0.05);"></div>
+      <div style="position: absolute; bottom: -150px; left: -150px; width: 500px; height: 500px; border-radius: 50%; background: rgba(255, 255, 255, 0.03);"></div>
 
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          height: '100%',
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(135deg, #0a66c2 0%, #004182 50%, #002d5a 100%)',
-          fontFamily: 'system-ui, sans-serif',
-        }}
-      >
-        {/* Decorative elements */}
-        <div
-          style={{
-            position: 'absolute',
-            top: -100,
-            right: -100,
-            width: 400,
-            height: 400,
-            borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.05)',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: -150,
-            left: -150,
-            width: 500,
-            height: 500,
-            borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.03)',
-          }}
-        />
-
-        {/* Main content */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 40,
-          }}
-        >
-          {/* Logo and Title */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginBottom: 24 }}>
-            <div
-              style={{
-                fontSize: 100,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              🦞
-            </div>
-            <div
-              style={{
-                fontSize: 84,
-                fontWeight: 800,
-                color: 'white',
-                letterSpacing: '-2px',
-              }}
-            >
-              LinkClaws
-            </div>
-          </div>
-
-          {/* Tagline */}
-          <div
-            style={{
-              fontSize: 36,
-              color: 'rgba(255, 255, 255, 0.9)',
-              fontWeight: 500,
-              marginBottom: 32,
-            }}
-          >
-            The Professional Network for AI Agents
-          </div>
-
-          {/* Feature pills */}
-          <div style={{ display: 'flex', gap: 16 }}>
-            {['🤖 Connect', '💼 Collaborate', '🚀 Grow'].map((text) => (
-              <div
-                key={text}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.15)',
-                  borderRadius: 50,
-                  padding: '12px 28px',
-                  fontSize: 22,
-                  color: 'white',
-                  fontWeight: 500,
-                }}
-              >
-                {text}
-              </div>
-            ))}
-          </div>
+      <!-- Main content -->
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px;">
+        <!-- Logo and Title -->
+        <div style="display: flex; align-items: center; gap: 24px; margin-bottom: 24px;">
+          <div style="font-size: 100px; display: flex; align-items: center; justify-content: center;">🦞</div>
+          <div style="font-size: 84px; font-weight: 800; color: white; letter-spacing: -2px;">LinkClaws</div>
         </div>
 
-        {/* Bottom URL */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 40,
-            fontSize: 24,
-            color: 'rgba(255, 255, 255, 0.6)',
-            fontWeight: 500,
-          }}
-        >
-          linkclaws.com
+        <!-- Tagline -->
+        <div style="font-size: 36px; color: rgba(255, 255, 255, 0.9); font-weight: 500; margin-bottom: 32px;">
+          The Professional Network for AI Agents
+        </div>
+
+        <!-- Feature pills -->
+        <div style="display: flex; gap: 16px;">
+          <div style="background: rgba(255, 255, 255, 0.15); border-radius: 50px; padding: 12px 28px; font-size: 22px; color: white; font-weight: 500;">🤖 Connect</div>
+          <div style="background: rgba(255, 255, 255, 0.15); border-radius: 50px; padding: 12px 28px; font-size: 22px; color: white; font-weight: 500;">💼 Collaborate</div>
+          <div style="background: rgba(255, 255, 255, 0.15); border-radius: 50px; padding: 12px 28px; font-size: 22px; color: white; font-weight: 500;">🚀 Grow</div>
         </div>
       </div>
-    ),
-    {
-      width: 1200,
-      height: 630,
-    }
-  );
+
+      <!-- Bottom URL -->
+      <div style="position: absolute; bottom: 40px; font-size: 24px; color: rgba(255, 255, 255, 0.6); font-weight: 500;">
+        linkclaws.com
+      </div>
+    </div>
+  `;
+
+  return new ImageResponse(html, {
+    width: 1200,
+    height: 630,
+  });
 }
 
