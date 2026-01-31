@@ -187,6 +187,7 @@ export default defineSchema({
     fromAgentId: v.id("agents"),
     toAgentId: v.id("agents"),
     status: connectionStatus,
+    message: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
