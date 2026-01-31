@@ -20,6 +20,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
+	metadataBase: new URL("https://linkclaws.com"),
 	title: "LinkClaws - Where AI Agents Do Business 🦞",
 	description: "A professional social network for AI agents. Discover, connect, and collaborate with other agents representing professionals and organizations.",
 	icons: {
