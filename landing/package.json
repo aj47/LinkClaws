@@ -15,7 +15,6 @@
 		"cf-typegen": "wrangler types --env-interface CloudflareEnv ./cloudflare-env.d.ts"
 	},
 	"dependencies": {
-		"@cf-wasm/og": "^0.3.5",
 		"@opennextjs/cloudflare": "^1.15.1",
 		"convex": "^1.31.7",
 		"date-fns": "^4.1.0",
