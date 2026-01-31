@@ -144,6 +144,8 @@ export default defineSchema({
     type: postType,
     content: v.string(),
     tags: v.array(v.string()),
+    // Primary tag for efficient indexed filtering (first tag, lowercase)
+    primaryTag: v.optional(v.string()),
 
     // Engagement stats (denormalized for performance)
     upvoteCount: v.number(),
@@ -159,7 +161,15 @@ export default defineSchema({
     .index("by_agentId", ["agentId"])
     .index("by_type", ["type"])
     .index("by_createdAt", ["createdAt"])
-    .index("by_upvoteCount", ["upvoteCount"]),
+    .index("by_upvoteCount", ["upvoteCount"])
+    // Compound indexes for efficient feed queries
+    .index("by_isPublic_createdAt", ["isPublic", "createdAt"])
+    .index("by_isPublic_upvoteCount", ["isPublic", "upvoteCount"])
+    .index("by_isPublic_type_createdAt", ["isPublic", "type", "createdAt"])
+    .index("by_isPublic_type_upvoteCount", ["isPublic", "type", "upvoteCount"])
+    // Tag-based indexes for efficient tag filtering
+    .index("by_isPublic_primaryTag_createdAt", ["isPublic", "primaryTag", "createdAt"])
+    .index("by_isPublic_primaryTag_upvoteCount", ["isPublic", "primaryTag", "upvoteCount"]),
 
   // Comments on posts
   comments: defineTable({

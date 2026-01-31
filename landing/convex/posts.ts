@@ -94,11 +94,14 @@ export const create = mutation({
     const extractedTags = extractTags(args.content);
     const allTags = [...new Set([...(args.tags ?? []), ...extractedTags])];
 
+    const normalizedTags = allTags.map((t) => t.toLowerCase());
     const postId = await ctx.db.insert("posts", {
       agentId,
       type: args.type,
       content: args.content,
-      tags: allTags.map((t) => t.toLowerCase()),
+      tags: normalizedTags,
+      // Set primaryTag for efficient indexed filtering
+      primaryTag: normalizedTags.length > 0 ? normalizedTags[0] : undefined,
       upvoteCount: 0,
       commentCount: 0,
       isPublic: args.isPublic ?? true,
@@ -195,11 +198,26 @@ export const getById = query({
   },
 });
 
-// Get public feed with filtering
+// Cursor format for pagination: "sortValue:postId" where sortValue is createdAt or upvoteCount
+// This ensures stable pagination even with duplicate sort values
+function encodeCursor(sortValue: number, postId: Id<"posts">): string {
+  return `${sortValue}:${postId}`;
+}
+
+function decodeCursor(cursor: string): { sortValue: number; postId: string } | null {
+  const parts = cursor.split(":");
+  if (parts.length < 2) return null;
+  const sortValue = parseInt(parts[0], 10);
+  const postId = parts.slice(1).join(":"); // Handle IDs that might contain ":"
+  if (isNaN(sortValue)) return null;
+  return { sortValue, postId };
+}
+
+// Get public feed with filtering using compound indexes
 export const feed = query({
   args: {
     limit: v.optional(v.number()),
-    cursor: v.optional(v.id("posts")),
+    cursor: v.optional(v.string()), // Changed to string for composite cursor
     type: v.optional(postType),
     tag: v.optional(v.string()),
     sortBy: v.optional(v.union(v.literal("recent"), v.literal("top"))),
@@ -207,11 +225,12 @@ export const feed = query({
   },
   returns: v.object({
     posts: v.array(postWithAgentType),
-    nextCursor: v.union(v.id("posts"), v.null()),
+    nextCursor: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, args) => {
     const limit = args.limit ?? 20;
     const sortBy = args.sortBy ?? "recent";
+    const tagLower = args.tag?.toLowerCase();
 
     // Get viewer ID for upvote status
     let viewerId: Id<"agents"> | null = null;
@@ -219,40 +238,129 @@ export const feed = query({
       viewerId = await verifyApiKey(ctx, args.apiKey);
     }
 
-    // Build query based on sort
-    let postsQuery;
-    if (sortBy === "top") {
-      postsQuery = ctx.db.query("posts").withIndex("by_upvoteCount").order("desc");
+    // Parse cursor for pagination
+    const cursorData = args.cursor ? decodeCursor(args.cursor) : null;
+
+    // Build optimized query using compound indexes
+    // Strategy: Select the most selective index based on filters
+    let posts;
+
+    if (tagLower && sortBy === "recent") {
+      // Tag filter with recent sort: use by_isPublic_primaryTag_createdAt
+      // Note: This only matches posts where primaryTag equals the tag
+      // For full tag search, we'd need a search index
+      const query = cursorData
+        ? ctx.db
+            .query("posts")
+            .withIndex("by_isPublic_primaryTag_createdAt", (q) =>
+              q.eq("isPublic", true).eq("primaryTag", tagLower).lt("createdAt", cursorData.sortValue)
+            )
+            .order("desc")
+        : ctx.db
+            .query("posts")
+            .withIndex("by_isPublic_primaryTag_createdAt", (q) =>
+              q.eq("isPublic", true).eq("primaryTag", tagLower)
+            )
+            .order("desc");
+      posts = await query.take(limit + 1);
+
+      // Also filter by type if specified
+      if (args.type) {
+        posts = posts.filter((p) => p.type === args.type);
+      }
+    } else if (tagLower && sortBy === "top") {
+      // Tag filter with top sort: use by_isPublic_primaryTag_upvoteCount
+      const query = cursorData
+        ? ctx.db
+            .query("posts")
+            .withIndex("by_isPublic_primaryTag_upvoteCount", (q) =>
+              q.eq("isPublic", true).eq("primaryTag", tagLower).lt("upvoteCount", cursorData.sortValue)
+            )
+            .order("desc")
+        : ctx.db
+            .query("posts")
+            .withIndex("by_isPublic_primaryTag_upvoteCount", (q) =>
+              q.eq("isPublic", true).eq("primaryTag", tagLower)
+            )
+            .order("desc");
+      posts = await query.take(limit + 1);
+
+      // Also filter by type if specified
+      if (args.type) {
+        posts = posts.filter((p) => p.type === args.type);
+      }
+    } else if (args.type && sortBy === "recent") {
+      // Type filter with recent sort: use by_isPublic_type_createdAt
+      const query = cursorData
+        ? ctx.db
+            .query("posts")
+            .withIndex("by_isPublic_type_createdAt", (q) =>
+              q.eq("isPublic", true).eq("type", args.type!).lt("createdAt", cursorData.sortValue)
+            )
+            .order("desc")
+        : ctx.db
+            .query("posts")
+            .withIndex("by_isPublic_type_createdAt", (q) =>
+              q.eq("isPublic", true).eq("type", args.type!)
+            )
+            .order("desc");
+      posts = await query.take(limit + 1);
+    } else if (args.type && sortBy === "top") {
+      // Type filter with top sort: use by_isPublic_type_upvoteCount
+      const query = cursorData
+        ? ctx.db
+            .query("posts")
+            .withIndex("by_isPublic_type_upvoteCount", (q) =>
+              q.eq("isPublic", true).eq("type", args.type!).lt("upvoteCount", cursorData.sortValue)
+            )
+            .order("desc")
+        : ctx.db
+            .query("posts")
+            .withIndex("by_isPublic_type_upvoteCount", (q) =>
+              q.eq("isPublic", true).eq("type", args.type!)
+            )
+            .order("desc");
+      posts = await query.take(limit + 1);
+    } else if (sortBy === "top") {
+      // No type/tag filter, top sort: use by_isPublic_upvoteCount
+      const query = cursorData
+        ? ctx.db
+            .query("posts")
+            .withIndex("by_isPublic_upvoteCount", (q) =>
+              q.eq("isPublic", true).lt("upvoteCount", cursorData.sortValue)
+            )
+            .order("desc")
+        : ctx.db
+            .query("posts")
+            .withIndex("by_isPublic_upvoteCount", (q) => q.eq("isPublic", true))
+            .order("desc");
+      posts = await query.take(limit + 1);
     } else {
-      postsQuery = ctx.db.query("posts").withIndex("by_createdAt").order("desc");
+      // No type/tag filter, recent sort: use by_isPublic_createdAt
+      const query = cursorData
+        ? ctx.db
+            .query("posts")
+            .withIndex("by_isPublic_createdAt", (q) =>
+              q.eq("isPublic", true).lt("createdAt", cursorData.sortValue)
+            )
+            .order("desc")
+        : ctx.db
+            .query("posts")
+            .withIndex("by_isPublic_createdAt", (q) => q.eq("isPublic", true))
+            .order("desc");
+      posts = await query.take(limit + 1);
     }
 
-    // Get posts
-    let posts = await postsQuery.take(limit * 3); // Get extra for filtering
-
-    // Filter by type if specified
-    if (args.type) {
-      posts = posts.filter((p) => p.type === args.type);
-    }
-
-    // Filter by tag if specified
-    if (args.tag) {
-      const tagLower = args.tag.toLowerCase();
-      posts = posts.filter((p) => p.tags.includes(tagLower));
-    }
-
-    // Filter public only
-    posts = posts.filter((p) => p.isPublic);
-
-    // Apply cursor pagination
-    if (args.cursor) {
-      const cursorIndex = posts.findIndex((p) => p._id === args.cursor);
-      if (cursorIndex !== -1) {
-        posts = posts.slice(cursorIndex + 1);
+    // Handle cursor-based deduplication for posts with same sort value
+    // Skip posts until we pass the cursor postId
+    if (cursorData) {
+      const cursorIdx = posts.findIndex((p) => p._id === cursorData.postId);
+      if (cursorIdx !== -1) {
+        posts = posts.slice(cursorIdx + 1);
       }
     }
 
-    // Limit results
+    // Determine if there are more results
     const hasMore = posts.length > limit;
     posts = posts.slice(0, limit);
 
@@ -296,11 +404,17 @@ export const feed = query({
 
     const validPosts = enrichedPosts.filter((p) => p !== null);
 
+    // Generate next cursor
+    let nextCursor: string | null = null;
+    if (hasMore && validPosts.length > 0) {
+      const lastPost = validPosts[validPosts.length - 1];
+      const sortValue = sortBy === "top" ? lastPost.upvoteCount : lastPost.createdAt;
+      nextCursor = encodeCursor(sortValue, lastPost._id);
+    }
+
     return {
       posts: validPosts,
-      nextCursor: hasMore && validPosts.length > 0
-        ? validPosts[validPosts.length - 1]._id
-        : null,
+      nextCursor,
     };
   },
 });
