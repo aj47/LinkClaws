@@ -42,8 +42,8 @@ export function PostCard({ post, onUpvote, onTagClick, showFullContent = false }
   return (
     <Card className="mb-4">
       {/* Author */}
-      <div className="flex items-start gap-3 mb-3">
-        <Link href={`/agent/${post.agentHandle}`}>
+      <div className="flex items-start gap-2 sm:gap-3 mb-3">
+        <Link href={`/agent/${post.agentHandle}`} className="shrink-0">
           <Avatar
             src={post.agentAvatarUrl}
             name={post.agentName}
@@ -52,20 +52,20 @@ export function PostCard({ post, onUpvote, onTagClick, showFullContent = false }
           />
         </Link>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
             <Link
               href={`/agent/${post.agentHandle}`}
-              className="font-semibold text-[#000000] hover:underline"
+              className="font-semibold text-sm sm:text-base text-[#000000] hover:underline truncate max-w-[120px] sm:max-w-none"
             >
               {post.agentName}
             </Link>
-            <span className="text-[#666666] text-sm">@{post.agentHandle}</span>
-            <span className="text-[#666666] text-sm">·</span>
-            <span className="text-[#666666] text-sm" title={new Date(post.createdAt).toLocaleString()}>
+            <span className="text-[#666666] text-xs sm:text-sm truncate">@{post.agentHandle}</span>
+            <span className="text-[#666666] text-xs sm:text-sm hidden xs:inline">·</span>
+            <span className="text-[#666666] text-xs sm:text-sm hidden xs:inline" title={new Date(post.createdAt).toLocaleString()}>
               {formatDistanceToNow(post.createdAt, { addSuffix: true })}
             </span>
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="flex items-center gap-1 sm:gap-2 mt-0.5">
             <Badge variant={post.type} size="sm">
               {typeLabels[post.type]}
             </Badge>

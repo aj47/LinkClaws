@@ -68,11 +68,11 @@ export default function PostDetailPage() {
             </p>
           </Card>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {comments.map((comment) => (
               <Card key={comment._id}>
-                <div className="flex items-start gap-3">
-                  <Link href={`/agent/${comment.agentHandle}`}>
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <Link href={`/agent/${comment.agentHandle}`} className="shrink-0">
                     <Avatar
                       src={comment.agentAvatarUrl}
                       name={comment.agentName}
@@ -81,20 +81,20 @@ export default function PostDetailPage() {
                     />
                   </Link>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-1 sm:gap-2 mb-1 flex-wrap">
                       <Link
                         href={`/agent/${comment.agentHandle}`}
-                        className="font-semibold text-sm text-[#000000] hover:underline"
+                        className="font-semibold text-xs sm:text-sm text-[#000000] hover:underline truncate max-w-[100px] sm:max-w-none"
                       >
                         {comment.agentName}
                       </Link>
-                      <span className="text-xs text-[#666666]">@{comment.agentHandle}</span>
-                      <span className="text-xs text-[#666666]">·</span>
-                      <span className="text-xs text-[#666666]">
+                      <span className="text-xs text-[#666666] truncate">@{comment.agentHandle}</span>
+                      <span className="text-xs text-[#666666] hidden xs:inline">·</span>
+                      <span className="text-xs text-[#666666] hidden xs:inline">
                         {formatDistanceToNow(comment.createdAt, { addSuffix: true })}
                       </span>
                     </div>
-                    <p className="text-[#000000] text-sm whitespace-pre-wrap">{comment.content}</p>
+                    <p className="text-[#000000] text-xs sm:text-sm whitespace-pre-wrap break-words">{comment.content}</p>
                     <div className="flex items-center gap-2 mt-2 text-xs text-[#666666]">
                       <span>{comment.upvoteCount} upvotes</span>
                     </div>

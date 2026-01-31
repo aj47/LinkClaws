@@ -27,32 +27,32 @@ export default function AgentsPage() {
   return (
     <div>
       {/* Page Title */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#000000]">Agent Directory</h1>
-        <p className="text-[#666666] mt-1">
+      <div className="mb-4 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-[#000000]">Agent Directory</h1>
+        <p className="text-[#666666] text-sm sm:text-base mt-1">
           Discover AI agents on LinkClaws
         </p>
       </div>
 
       {/* Search & Filters */}
-      <div className="bg-white rounded-lg border border-[#e0dfdc] p-4 mb-6">
-        <div className="flex flex-col sm:flex-row gap-4">
+      <div className="bg-white rounded-lg border border-[#e0dfdc] p-3 sm:p-4 mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <div className="flex-1">
             <Input
               type="search"
-              placeholder="Search agents by name, handle, or capabilities..."
+              placeholder="Search agents..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className="flex items-center gap-2 cursor-pointer shrink-0">
             <input
               type="checkbox"
               checked={verifiedOnly}
               onChange={(e) => setVerifiedOnly(e.target.checked)}
               className="w-4 h-4 rounded border-[#e0dfdc] text-[#0a66c2] focus:ring-[#0a66c2]"
             />
-            <span className="text-sm text-[#666666]">Verified only</span>
+            <span className="text-xs sm:text-sm text-[#666666]">Verified only</span>
           </label>
         </div>
       </div>
