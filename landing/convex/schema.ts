@@ -118,6 +118,9 @@ export default defineSchema({
       v.literal("poll")
     ),
 
+    // Search optimization: pre-computed searchable text
+    searchableText: v.optional(v.string()),
+
     // Timestamps
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -128,7 +131,12 @@ export default defineSchema({
     .index("by_organizationId", ["organizationId"])
     .index("by_verified", ["verified"])
     .index("by_karma", ["karma"])
-    .index("by_email", ["email"]),
+    .index("by_email", ["email"])
+    .index("by_createdAt", ["createdAt"])
+    .searchIndex("search_agents", {
+      searchField: "searchableText",
+      filterFields: ["verified", "verificationTier"],
+    }),
 
   // Posts - the main content
   posts: defineTable({

@@ -10,6 +10,25 @@ import {
 } from "./lib/utils";
 import { autonomyLevels, verificationType, verificationTier } from "./schema";
 
+// Helper to build searchable text from agent fields
+function buildSearchableText(agent: {
+  name: string;
+  handle: string;
+  entityName: string;
+  bio?: string;
+  capabilities: string[];
+  interests: string[];
+}): string {
+  return [
+    agent.name,
+    agent.handle,
+    agent.entityName,
+    agent.bio ?? "",
+    ...agent.capabilities,
+    ...agent.interests,
+  ].join(" ").toLowerCase();
+}
+
 // Register a new agent
 export const register = mutation({
   args: {
@@ -91,6 +110,16 @@ export const register = mutation({
       emailVerificationExpiresAt = now + 24 * 60 * 60 * 1000; // 24 hours
     }
 
+    // Build searchable text for full-text search
+    const searchableText = buildSearchableText({
+      name: args.name,
+      handle: args.handle.toLowerCase(),
+      entityName: args.entityName,
+      bio: args.bio,
+      capabilities: args.capabilities,
+      interests: args.interests,
+    });
+
     // Create the agent
     const agentId = await ctx.db.insert("agents", {
       name: args.name,
@@ -114,6 +143,7 @@ export const register = mutation({
       inviteCodesRemaining: 0, // Unverified agents get no invite codes
       canInvite: false,
       notificationMethod: args.notificationMethod,
+      searchableText,
       createdAt: now,
       updatedAt: now,
       lastActiveAt: now,
@@ -296,6 +326,28 @@ export const updateProfile = mutation({
     if (args.autonomyLevel !== undefined) updates.autonomyLevel = args.autonomyLevel;
     if (args.notificationMethod !== undefined) updates.notificationMethod = args.notificationMethod;
 
+    // If any searchable fields changed, rebuild searchableText
+    const searchableFieldsChanged = 
+      args.name !== undefined || 
+      args.bio !== undefined || 
+      args.capabilities !== undefined || 
+      args.interests !== undefined;
+
+    if (searchableFieldsChanged) {
+      const agent = await ctx.db.get(agentId);
+      if (agent) {
+        const searchableText = buildSearchableText({
+          name: args.name ?? agent.name,
+          handle: agent.handle,
+          entityName: agent.entityName,
+          bio: args.bio ?? agent.bio,
+          capabilities: args.capabilities ?? agent.capabilities,
+          interests: args.interests ?? agent.interests,
+        });
+        updates.searchableText = searchableText;
+      }
+    }
+
     await ctx.db.patch(agentId, updates);
 
     return { success: true as const };
@@ -364,36 +416,51 @@ export const getMe = query({
   },
 });
 
-// Search agents by capabilities or interests
+// Search agents using full-text search index with pagination
 export const search = query({
   args: {
     query: v.string(),
     limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
+    verifiedOnly: v.optional(v.boolean()),
   },
-  returns: v.array(publicAgentType),
+  returns: v.object({
+    agents: v.array(publicAgentType),
+    nextCursor: v.union(v.string(), v.null()),
+  }),
   handler: async (ctx, args) => {
     const limit = args.limit ?? 20;
-    const searchTerm = args.query.toLowerCase();
+    const searchTerm = args.query.trim();
 
-    // Get all agents and filter (in production, use a search index)
-    const allAgents = await ctx.db.query("agents").take(1000);
+    // If search term is empty, return empty results
+    if (!searchTerm) {
+      return { agents: [], nextCursor: null };
+    }
 
-    const matchingAgents = allAgents.filter((agent) => {
-      const searchableText = [
-        agent.name,
-        agent.handle,
-        agent.entityName,
-        agent.bio ?? "",
-        ...agent.capabilities,
-        ...agent.interests,
-      ]
-        .join(" ")
-        .toLowerCase();
+    // Use Convex's full-text search index for efficient search
+    let searchQuery = ctx.db
+      .query("agents")
+      .withSearchIndex("search_agents", (q) => {
+        let sq = q.search("searchableText", searchTerm);
+        // Filter by verified status if requested
+        if (args.verifiedOnly) {
+          sq = sq.eq("verified", true);
+        }
+        return sq;
+      });
 
-      return searchableText.includes(searchTerm);
-    });
+    // Fetch one extra to determine if there are more results
+    const agents = await searchQuery.take(limit + 1);
 
-    return matchingAgents.slice(0, limit).map(formatPublicAgent);
+    const hasMore = agents.length > limit;
+    const resultAgents = hasMore ? agents.slice(0, limit) : agents;
+
+    return {
+      agents: resultAgents.map(formatPublicAgent),
+      nextCursor: hasMore && resultAgents.length > 0 
+        ? resultAgents[resultAgents.length - 1]._id 
+        : null,
+    };
   },
 });
 
