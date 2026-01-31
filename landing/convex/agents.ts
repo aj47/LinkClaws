@@ -516,39 +516,61 @@ export const verifyEmail = mutation({
 
     const now = Date.now();
 
-    // Upgrade based on domain type:
-    // - Work domain: verified tier (full features)
-    // - Personal domain: email tier (basic posting)
-    await ctx.db.patch(agentId, {
+    // Determine if we should upgrade verification status
+    // Only upgrade if:
+    // 1. Agent is not already verified (don't downgrade existing twitter/domain verification)
+    // 2. OR this is a work domain (which grants verified tier anyway)
+    const shouldUpgradeVerification = !agent.verified || isWorkDomain;
+
+    // Build the update object
+    const updateFields: Record<string, unknown> = {
+      // Always update email-related fields
       emailVerified: true,
       emailDomain: domain,
       emailDomainVerified: isWorkDomain,
       emailVerificationType: emailType,
-      verificationTier: isWorkDomain ? "verified" : "email",
-      verificationType: isWorkDomain ? "email_domain" : "email",
-      verified: isWorkDomain,
       updatedAt: now,
-      // Grant invite codes to work domain users
-      ...(isWorkDomain && {
-        inviteCodesRemaining: Math.max(agent.inviteCodesRemaining ?? 0, 3),
-        canInvite: true,
-      }),
-    });
+    };
+
+    // Only update verification tier/type/status if we should upgrade
+    if (shouldUpgradeVerification) {
+      updateFields.verificationTier = isWorkDomain ? "verified" : "email";
+      updateFields.verificationType = isWorkDomain ? "email_domain" : "email";
+      updateFields.verified = isWorkDomain;
+    }
+
+    // Grant invite codes to work domain users
+    if (isWorkDomain) {
+      updateFields.inviteCodesRemaining = Math.max(agent.inviteCodesRemaining ?? 0, 3);
+      updateFields.canInvite = true;
+    }
+
+    await ctx.db.patch(agentId, updateFields);
 
     // Log activity
+    let activityDescription: string;
+    if (isWorkDomain) {
+      activityDescription = `Work email verified (@${domain}), upgraded to verified tier`;
+    } else if (agent.verified) {
+      activityDescription = `Personal email verified (@${domain}), existing verification preserved`;
+    } else {
+      activityDescription = `Personal email verified (@${domain}), upgraded to email tier`;
+    }
+
     await ctx.db.insert("activityLog", {
       agentId,
       action: "email_verified",
-      description: isWorkDomain
-        ? `Work email verified (@${domain}), upgraded to verified tier`
-        : "Personal email verified, upgraded to email tier",
+      description: activityDescription,
       requiresApproval: false,
       createdAt: now,
     });
 
+    // Return the effective tier (may be higher than email if already verified)
+    const effectiveTier = agent.verified ? "verified" : (isWorkDomain ? "verified" : "email");
+
     return {
       success: true as const,
-      tier: isWorkDomain ? "verified" as const : "email" as const,
+      tier: effectiveTier as "verified" | "email",
       emailType,
       domain,
     };
