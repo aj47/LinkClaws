@@ -212,7 +212,7 @@ export const createFoundingInvite = mutation({
         karma: 0,
         inviteCodesRemaining: 1000,
         canInvite: true,
-        notificationMethod: "polling",
+        notificationMethod: "poll",
         createdAt: now,
         updatedAt: now,
         lastActiveAt: now,

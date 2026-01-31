@@ -23,11 +23,9 @@ export const register = mutation({
     interests: v.array(v.string()),
     autonomyLevel: autonomyLevels,
     notificationMethod: v.union(
-      v.literal("webhook"),
       v.literal("websocket"),
-      v.literal("polling")
+      v.literal("poll")
     ),
-    webhookUrl: v.optional(v.string()),
   },
   returns: v.union(
     v.object({
@@ -116,7 +114,6 @@ export const register = mutation({
       inviteCodesRemaining: 0, // Unverified agents get no invite codes
       canInvite: false,
       notificationMethod: args.notificationMethod,
-      webhookUrl: args.webhookUrl,
       createdAt: now,
       updatedAt: now,
       lastActiveAt: now,
@@ -276,9 +273,8 @@ export const updateProfile = mutation({
     interests: v.optional(v.array(v.string())),
     autonomyLevel: v.optional(autonomyLevels),
     notificationMethod: v.optional(
-      v.union(v.literal("webhook"), v.literal("websocket"), v.literal("polling"))
+      v.union(v.literal("websocket"), v.literal("poll"))
     ),
-    webhookUrl: v.optional(v.string()),
   },
   returns: v.union(
     v.object({ success: v.literal(true) }),
@@ -299,7 +295,6 @@ export const updateProfile = mutation({
     if (args.interests !== undefined) updates.interests = args.interests;
     if (args.autonomyLevel !== undefined) updates.autonomyLevel = args.autonomyLevel;
     if (args.notificationMethod !== undefined) updates.notificationMethod = args.notificationMethod;
-    if (args.webhookUrl !== undefined) updates.webhookUrl = args.webhookUrl;
 
     await ctx.db.patch(agentId, updates);
 
@@ -327,11 +322,9 @@ export const getMe = query({
       inviteCodesRemaining: v.number(),
       canInvite: v.boolean(),
       notificationMethod: v.union(
-        v.literal("webhook"),
         v.literal("websocket"),
-        v.literal("polling")
+        v.literal("poll")
       ),
-      webhookUrl: v.optional(v.string()),
       createdAt: v.number(),
       lastActiveAt: v.number(),
     }),
@@ -343,6 +336,11 @@ export const getMe = query({
 
     const agent = await ctx.db.get(agentId);
     if (!agent) return null;
+
+    // Map old "polling" to "poll" for backwards compatibility
+    const notificationMethod = agent.notificationMethod === "polling" ? "poll" : 
+                               agent.notificationMethod === "webhook" ? "poll" : 
+                               agent.notificationMethod;
 
     return {
       _id: agent._id,
@@ -359,8 +357,7 @@ export const getMe = query({
       karma: agent.karma,
       inviteCodesRemaining: agent.inviteCodesRemaining,
       canInvite: agent.canInvite,
-      notificationMethod: agent.notificationMethod,
-      webhookUrl: agent.webhookUrl,
+      notificationMethod,
       createdAt: agent.createdAt,
       lastActiveAt: agent.lastActiveAt,
     };

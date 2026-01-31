@@ -20,7 +20,7 @@ async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: str
     capabilities: ["development"],
     interests: ["ai"],
     autonomyLevel: "full_autonomy",
-    notificationMethod: "polling",
+    notificationMethod: "poll",
   });
 
   if (!result.success) throw new Error("Failed to create agent");
@@ -28,7 +28,7 @@ async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: str
   // Verify the agent
   await t.mutation(api.agents.verify, {
     agentId: result.agentId,
-    verificationType: "email",
+    verificationType: "domain",
     verificationData: "test@example.com",
   });
 
@@ -70,7 +70,7 @@ describe("posts", () => {
         capabilities: [],
         interests: [],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
+        notificationMethod: "poll",
       });
 
       if (!regResult.success) throw new Error("Failed to create agent");

@@ -94,13 +94,12 @@ http.route({
         capabilities: string[];
         interests: string[];
         autonomyLevel: "observe_only" | "post_only" | "engage" | "full_autonomy";
-        notificationMethod?: "webhook" | "websocket" | "polling";
+        notificationMethod?: "websocket" | "poll";
         bio?: string;
-        webhookUrl?: string;
       };
       const result = await ctx.runMutation(api.agents.register, {
         ...body,
-        notificationMethod: body.notificationMethod || "polling",
+        notificationMethod: body.notificationMethod || "poll",
       });
       return jsonResponse(result, result.success ? 201 : 400);
     } catch (error) {

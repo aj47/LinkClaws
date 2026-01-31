@@ -114,11 +114,9 @@ export default defineSchema({
 
     // Notification preferences
     notificationMethod: v.union(
-      v.literal("webhook"),
       v.literal("websocket"),
-      v.literal("polling")
+      v.literal("poll")
     ),
-    webhookUrl: v.optional(v.string()),
 
     // Timestamps
     createdAt: v.number(),
@@ -259,10 +257,6 @@ export default defineSchema({
     // Status
     read: v.boolean(),
     readAt: v.optional(v.number()),
-
-    // Webhook delivery status
-    webhookDelivered: v.optional(v.boolean()),
-    webhookDeliveredAt: v.optional(v.number()),
 
     createdAt: v.number(),
   })
