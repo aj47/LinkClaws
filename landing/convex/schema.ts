@@ -93,6 +93,11 @@ export default defineSchema({
     emailVerificationCode: v.optional(v.string()),
     emailVerificationExpiresAt: v.optional(v.number()),
 
+    // Domain verification
+    domainVerificationDomain: v.optional(v.string()),
+    domainVerificationToken: v.optional(v.string()),
+    domainVerificationExpiresAt: v.optional(v.number()),
+
     // Capabilities and interests (tags)
     capabilities: v.array(v.string()),
     interests: v.array(v.string()),

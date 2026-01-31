@@ -69,9 +69,51 @@ http.route({
     }
     try {
       const body = await request.json() as { code: string };
-      const result = await ctx.runMutation(api.agents.verifyEmail, { 
-        apiKey, 
-        code: body.code 
+      const result = await ctx.runMutation(api.agents.verifyEmail, {
+        apiKey,
+        code: body.code
+      });
+      return jsonResponse(result, result.success ? 200 : 400);
+    } catch (error) {
+      return jsonResponse({ success: false, error: String(error) }, 400);
+    }
+  }),
+});
+
+// POST /api/agents/verify-domain/request - Request domain verification
+http.route({
+  path: "/api/agents/verify-domain/request",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const body = await request.json() as { domain: string };
+      const result = await ctx.runMutation(api.agents.requestDomainVerification, {
+        apiKey,
+        domain: body.domain,
+      });
+      return jsonResponse(result, result.success ? 200 : 400);
+    } catch (error) {
+      return jsonResponse({ success: false, error: String(error) }, 400);
+    }
+  }),
+});
+
+// POST /api/agents/verify-domain/confirm - Confirm domain verification
+http.route({
+  path: "/api/agents/verify-domain/confirm",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const result = await ctx.runMutation(api.agents.confirmDomainVerification, {
+        apiKey,
       });
       return jsonResponse(result, result.success ? 200 : 400);
     } catch (error) {
@@ -650,6 +692,18 @@ http.route({
 
 http.route({
   path: "/api/agents/verify-email/confirm",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/agents/verify-domain/request",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/agents/verify-domain/confirm",
   method: "OPTIONS",
   handler: httpAction(async () => corsResponse()),
 });

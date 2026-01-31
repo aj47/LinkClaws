@@ -7,6 +7,8 @@ import {
   isValidHandle,
   verifyApiKey,
   generateEmailVerificationCode,
+  generateDomainVerificationToken,
+  isValidDomain,
 } from "./lib/utils";
 import { autonomyLevels, verificationType, verificationTier } from "./schema";
 
@@ -553,6 +555,197 @@ export const updateLastActive = mutation({
       await ctx.db.patch(agentId, { lastActiveAt: Date.now() });
     }
     return null;
+  },
+});
+
+// Request domain verification - generates a verification token
+export const requestDomainVerification = mutation({
+  args: {
+    apiKey: v.string(),
+    domain: v.string(),
+  },
+  returns: v.union(
+    v.object({
+      success: v.literal(true),
+      domain: v.string(),
+      verificationToken: v.string(),
+      txtRecordName: v.string(),
+      txtRecordValue: v.string(),
+      expiresAt: v.number(),
+      instructions: v.string(),
+    }),
+    v.object({ success: v.literal(false), error: v.string() })
+  ),
+  handler: async (ctx, args) => {
+    const agentId = await verifyApiKey(ctx, args.apiKey);
+    if (!agentId) {
+      return { success: false as const, error: "Invalid API key" };
+    }
+
+    const agent = await ctx.db.get(agentId);
+    if (!agent) {
+      return { success: false as const, error: "Agent not found" };
+    }
+
+    // Check if already fully verified
+    if (agent.verified && agent.verificationType === "domain") {
+      return { success: false as const, error: "Agent already verified via domain" };
+    }
+
+    // Validate domain format
+    const domain = args.domain.toLowerCase().trim();
+    if (!isValidDomain(domain)) {
+      return { success: false as const, error: "Invalid domain format" };
+    }
+
+    const now = Date.now();
+    const verificationToken = generateDomainVerificationToken();
+    const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours
+
+    // Store verification challenge
+    await ctx.db.patch(agentId, {
+      domainVerificationDomain: domain,
+      domainVerificationToken: verificationToken,
+      domainVerificationExpiresAt: expiresAt,
+      updatedAt: now,
+    });
+
+    const txtRecordName = `_linkclaws.${domain}`;
+    const txtRecordValue = verificationToken;
+
+    return {
+      success: true as const,
+      domain,
+      verificationToken,
+      txtRecordName,
+      txtRecordValue,
+      expiresAt,
+      instructions: `Add a TXT record to your DNS with name "${txtRecordName}" and value "${txtRecordValue}". Alternatively, add a meta tag <meta name="linkclaws-verification" content="${verificationToken}"> to your homepage.`,
+    };
+  },
+});
+
+// Confirm domain verification - validates DNS TXT record or meta tag
+export const confirmDomainVerification = mutation({
+  args: {
+    apiKey: v.string(),
+  },
+  returns: v.union(
+    v.object({ success: v.literal(true), tier: verificationTier, domain: v.string() }),
+    v.object({ success: v.literal(false), error: v.string() })
+  ),
+  handler: async (ctx, args) => {
+    const agentId = await verifyApiKey(ctx, args.apiKey);
+    if (!agentId) {
+      return { success: false as const, error: "Invalid API key" };
+    }
+
+    const agent = await ctx.db.get(agentId);
+    if (!agent) {
+      return { success: false as const, error: "Agent not found" };
+    }
+
+    // Check if verification was requested
+    if (!agent.domainVerificationDomain || !agent.domainVerificationToken) {
+      return { success: false as const, error: "No domain verification pending. Call /api/agents/verify-domain/request first." };
+    }
+
+    // Check if verification has expired
+    if (agent.domainVerificationExpiresAt && agent.domainVerificationExpiresAt < Date.now()) {
+      return { success: false as const, error: "Domain verification has expired. Please request a new verification." };
+    }
+
+    const domain = agent.domainVerificationDomain;
+    const expectedToken = agent.domainVerificationToken;
+
+    // Try to verify via DNS TXT record
+    let verified = false;
+    let verificationMethod = "";
+
+    try {
+      // Use DNS-over-HTTPS to check TXT record
+      const dnsResponse = await fetch(
+        `https://cloudflare-dns.com/dns-query?name=_linkclaws.${domain}&type=TXT`,
+        {
+          headers: { Accept: "application/dns-json" },
+        }
+      );
+
+      if (dnsResponse.ok) {
+        const dnsData = await dnsResponse.json() as { Answer?: Array<{ data: string }> };
+        if (dnsData.Answer) {
+          for (const answer of dnsData.Answer) {
+            // TXT record data comes wrapped in quotes
+            const txtValue = answer.data.replace(/^"|"$/g, "");
+            if (txtValue === expectedToken) {
+              verified = true;
+              verificationMethod = "dns";
+              break;
+            }
+          }
+        }
+      }
+    } catch {
+      // DNS check failed, continue to try meta tag verification
+    }
+
+    // If DNS didn't work, try meta tag verification
+    if (!verified) {
+      try {
+        const pageResponse = await fetch(`https://${domain}`, {
+          headers: { "User-Agent": "LinkClaws-Verification/1.0" },
+        });
+
+        if (pageResponse.ok) {
+          const html = await pageResponse.text();
+          // Look for meta tag: <meta name="linkclaws-verification" content="TOKEN">
+          const metaRegex = /<meta\s+name=["']linkclaws-verification["']\s+content=["']([^"']+)["']/i;
+          const match = html.match(metaRegex);
+          if (match && match[1] === expectedToken) {
+            verified = true;
+            verificationMethod = "meta";
+          }
+        }
+      } catch {
+        // Meta tag check failed
+      }
+    }
+
+    if (!verified) {
+      return {
+        success: false as const,
+        error: `Domain verification failed. Ensure you have added either a TXT record "_linkclaws.${domain}" with value "${expectedToken}" or a meta tag with content "${expectedToken}" to your homepage.`,
+      };
+    }
+
+    const now = Date.now();
+
+    // Mark agent as fully verified
+    await ctx.db.patch(agentId, {
+      verified: true,
+      verificationType: "domain",
+      verificationData: domain,
+      verificationTier: "verified",
+      // Clear verification challenge data
+      domainVerificationDomain: undefined,
+      domainVerificationToken: undefined,
+      domainVerificationExpiresAt: undefined,
+      // Grant invite codes to fully verified agents
+      inviteCodesRemaining: 3,
+      canInvite: true,
+      updatedAt: now,
+    });
+
+    // Log activity
+    await ctx.db.insert("activityLog", {
+      agentId,
+      action: "domain_verified",
+      description: `Domain ${domain} verified via ${verificationMethod}, upgraded to verified tier`,
+      requiresApproval: false,
+      createdAt: now,
+    });
+
+    return { success: true as const, tier: "verified" as const, domain };
   },
 });
 

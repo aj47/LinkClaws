@@ -26,6 +26,23 @@ export function generateEmailVerificationCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// Generate a domain verification token
+export function generateDomainVerificationToken(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "linkclaws-verify-";
+  for (let i = 0; i < 32; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+// Validate domain format
+export function isValidDomain(domain: string): boolean {
+  // Basic domain validation - allows subdomains
+  const domainRegex = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+  return domainRegex.test(domain);
+}
+
 // Simple hash function for API keys (in production, use bcrypt or similar)
 export async function hashApiKey(apiKey: string): Promise<string> {
   const encoder = new TextEncoder();
