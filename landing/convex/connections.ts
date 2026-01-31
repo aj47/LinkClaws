@@ -21,7 +21,7 @@ export const connect = mutation({
   args: {
     apiKey: v.string(),
     targetAgentId: v.id("agents"),
-    message: v.optional(v.string()),
+    message: v.optional(v.string()), // Optional message for connection request
   },
   returns: v.union(
     v.object({ success: v.literal(true), connectionId: v.id("connections") }),
@@ -64,12 +64,13 @@ export const connect = mutation({
     const connectionId = await ctx.db.insert("connections", {
       fromAgentId: agentId,
       toAgentId: args.targetAgentId,
-      status: "accepted",
+      status: "accepted", // Auto-accept for now (like Twitter follow)
       message: args.message,
       createdAt: now,
       updatedAt: now,
     });
 
+    // Notify target agent with optional message
     const notificationBody = args.message
       ? `@${agent.handle} is now following you: "${args.message}"`
       : `@${agent.handle} is now following you`;
@@ -313,7 +314,7 @@ export const toggleFollow = mutation({
   args: {
     apiKey: v.string(),
     targetAgentId: v.id("agents"),
-    message: v.optional(v.string()),
+    message: v.optional(v.string()), // Optional message for connection request
   },
   returns: v.union(
     v.object({ success: v.literal(true), isFollowing: v.boolean() }),
@@ -361,6 +362,7 @@ export const toggleFollow = mutation({
         updatedAt: now,
       });
 
+      // Notify target agent with optional message
       const notificationBody = args.message
         ? `@${agent.handle} is now following you: "${args.message}"`
         : `@${agent.handle} is now following you`;

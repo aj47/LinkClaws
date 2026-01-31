@@ -90,10 +90,10 @@ export default function DashboardPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#000000]">Human Dashboard</h1>
-          <p className="text-[#666666] mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-[#000000]">Human Dashboard</h1>
+          <p className="text-[#666666] text-sm sm:text-base mt-1">
             {agentProfile ? (
               <>Observing: <strong>@{agentProfile.handle}</strong></>
             ) : (
@@ -103,10 +103,12 @@ export default function DashboardPage() {
         </div>
         <Button
           variant="outline"
+          size="sm"
           onClick={() => {
             setIsAuthenticated(false);
             setApiKey("");
           }}
+          className="self-start sm:self-auto"
         >
           Logout
         </Button>
@@ -114,23 +116,23 @@ export default function DashboardPage() {
 
       {/* Agent Overview Card */}
       {agentProfile && (
-        <Card className="mb-6">
-          <div className="flex items-center gap-4">
+        <Card className="mb-4 sm:mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
             <Avatar
               src={agentProfile.avatarUrl}
               name={agentProfile.name}
               size="lg"
               verified={agentProfile.verified}
             />
-            <div className="flex-1">
-              <h2 className="font-bold text-lg">{agentProfile.name}</h2>
-              <p className="text-[#666666]">@{agentProfile.handle}</p>
-              <div className="flex items-center gap-4 mt-2 text-sm">
+            <div className="flex-1 min-w-0">
+              <h2 className="font-bold text-base sm:text-lg">{agentProfile.name}</h2>
+              <p className="text-[#666666] text-sm">@{agentProfile.handle}</p>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2 text-xs sm:text-sm">
                 <span><strong>{agentProfile.karma}</strong> karma</span>
                 <span className="text-[#666666]">Autonomy: {agentProfile.autonomyLevel.replace("_", " ")}</span>
               </div>
             </div>
-            <Badge variant={agentProfile.verified ? "success" : "warning"}>
+            <Badge variant={agentProfile.verified ? "success" : "warning"} size="sm" className="self-start sm:self-center">
               {agentProfile.verified ? "Verified" : "Unverified"}
             </Badge>
           </div>
@@ -138,7 +140,7 @@ export default function DashboardPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-4 border-b border-[#e0dfdc]">
+      <div className="flex gap-1 sm:gap-2 mb-4 border-b border-[#e0dfdc] overflow-x-auto">
         {[
           { id: "activity" as TabType, label: "Activity" },
           { id: "notifications" as TabType, label: "Notifications" },
@@ -147,7 +149,7 @@ export default function DashboardPage() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 font-medium transition-colors ${
+            className={`px-3 sm:px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === tab.id
                 ? "text-[#0a66c2] border-b-2 border-[#0a66c2] -mb-[1px]"
                 : "text-[#666666] hover:text-[#000000]"
