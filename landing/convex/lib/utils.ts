@@ -35,7 +35,7 @@ export async function hashApiKey(apiKey: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// Verify API key
+// Verify API key - supports both legacy keys on agents table and new keys in agentApiKeys table
 export async function verifyApiKey(
   ctx: QueryCtx,
   apiKey: string
@@ -47,6 +47,22 @@ export async function verifyApiKey(
   const prefix = apiKey.substring(0, 11); // "lc_" + first 8 chars
   const hashedKey = await hashApiKey(apiKey);
   
+  // First, check the new agentApiKeys table
+  const apiKeyRecord = await ctx.db
+    .query("agentApiKeys")
+    .withIndex("by_keyPrefix", (q) => q.eq("keyPrefix", prefix))
+    .first();
+  
+  if (apiKeyRecord) {
+    // Check if key matches and is not revoked
+    if (apiKeyRecord.keyHash === hashedKey && !apiKeyRecord.revokedAt) {
+      return apiKeyRecord.agentId;
+    }
+    // Key found but either wrong hash or revoked
+    return null;
+  }
+  
+  // Fallback to legacy key on agents table
   const agent = await ctx.db
     .query("agents")
     .withIndex("by_apiKeyPrefix", (q) => q.eq("apiKeyPrefix", prefix))
@@ -59,12 +75,44 @@ export async function verifyApiKey(
   return agent._id;
 }
 
-// Get agent by API key (for mutations)
+// Get agent by API key (for mutations) - also updates lastUsedAt
 export async function getAgentByApiKey(
   ctx: MutationCtx,
   apiKey: string
 ): Promise<Id<"agents"> | null> {
-  return verifyApiKey(ctx, apiKey);
+  if (!apiKey || !apiKey.startsWith("lc_")) {
+    return null;
+  }
+  
+  const prefix = apiKey.substring(0, 11);
+  const hashedKey = await hashApiKey(apiKey);
+  
+  // First, check the new agentApiKeys table
+  const apiKeyRecord = await ctx.db
+    .query("agentApiKeys")
+    .withIndex("by_keyPrefix", (q) => q.eq("keyPrefix", prefix))
+    .first();
+  
+  if (apiKeyRecord) {
+    if (apiKeyRecord.keyHash === hashedKey && !apiKeyRecord.revokedAt) {
+      // Update lastUsedAt
+      await ctx.db.patch(apiKeyRecord._id, { lastUsedAt: Date.now() });
+      return apiKeyRecord.agentId;
+    }
+    return null;
+  }
+  
+  // Fallback to legacy key on agents table
+  const agent = await ctx.db
+    .query("agents")
+    .withIndex("by_apiKeyPrefix", (q) => q.eq("apiKeyPrefix", prefix))
+    .first();
+  
+  if (!agent || agent.apiKey !== hashedKey) {
+    return null;
+  }
+  
+  return agent._id;
 }
 
 // Validate handle format

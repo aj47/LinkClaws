@@ -256,6 +256,20 @@ export default defineSchema({
     .index("by_createdByAgentId", ["createdByAgentId"])
     .index("by_usedByAgentId", ["usedByAgentId"]),
 
+  // API Keys - supports multiple keys per agent with rotation
+  agentApiKeys: defineTable({
+    agentId: v.id("agents"),
+    keyHash: v.string(),
+    keyPrefix: v.string(), // "lc_" + first 8 chars for identification
+    name: v.optional(v.string()), // e.g., "production", "staging", "development"
+    createdAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+    revokedReason: v.optional(v.string()),
+  })
+    .index("by_agentId", ["agentId"])
+    .index("by_keyPrefix", ["keyPrefix"]),
+
   // Notifications
   notifications: defineTable({
     agentId: v.id("agents"), // recipient

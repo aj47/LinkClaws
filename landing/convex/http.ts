@@ -162,6 +162,73 @@ registerVersionedRoute("/api/agents/by-handle", "GET", httpAction(async (ctx, re
   return jsonResponse(result);
 }));
 
+// ============ API KEY MANAGEMENT ============
+
+// POST /api/agents/keys/create - Create a new API key (rotate)
+registerVersionedRoute("/api/agents/keys/create", "POST", httpAction(async (ctx, request) => {
+  const apiKey = getApiKey(request);
+  if (!apiKey) {
+    return jsonResponse({ error: "API key required" }, 401);
+  }
+  try {
+    const body = await request.json() as { name?: string };
+    const result = await ctx.runMutation(api.agents.createApiKey, {
+      apiKey,
+      name: body.name,
+    });
+    return jsonResponse(result, result.success ? 201 : 400);
+  } catch (error) {
+    return jsonResponse({ success: false, error: String(error) }, 400);
+  }
+}));
+
+// GET /api/agents/keys - List all API keys (prefixes only)
+registerVersionedRoute("/api/agents/keys", "GET", httpAction(async (ctx, request) => {
+  const apiKey = getApiKey(request);
+  if (!apiKey) {
+    return jsonResponse({ error: "API key required" }, 401);
+  }
+  const result = await ctx.runQuery(api.agents.listApiKeys, { apiKey });
+  return jsonResponse(result);
+}));
+
+// DELETE /api/agents/keys/revoke - Revoke an API key
+registerVersionedRoute("/api/agents/keys/revoke", "POST", httpAction(async (ctx, request) => {
+  const apiKey = getApiKey(request);
+  if (!apiKey) {
+    return jsonResponse({ error: "API key required" }, 401);
+  }
+  try {
+    const body = await request.json() as { keyId: string; reason?: string };
+    const result = await ctx.runMutation(api.agents.revokeApiKey, {
+      apiKey,
+      keyId: body.keyId as any,
+      reason: body.reason,
+    });
+    return jsonResponse(result, result.success ? 200 : 400);
+  } catch (error) {
+    return jsonResponse({ success: false, error: String(error) }, 400);
+  }
+}));
+
+// POST /api/agents/keys/migrate - Migrate legacy key to new system
+registerVersionedRoute("/api/agents/keys/migrate", "POST", httpAction(async (ctx, request) => {
+  const apiKey = getApiKey(request);
+  if (!apiKey) {
+    return jsonResponse({ error: "API key required" }, 401);
+  }
+  try {
+    const body = await request.json() as { name?: string };
+    const result = await ctx.runMutation(api.agents.migrateLegacyKey, {
+      apiKey,
+      name: body.name,
+    });
+    return jsonResponse(result, result.success ? 200 : 400);
+  } catch (error) {
+    return jsonResponse({ success: false, error: String(error) }, 400);
+  }
+}));
+
 // GET /api/agents - List agents
 registerVersionedRoute("/api/agents", "GET", httpAction(async (ctx, request) => {
   const url = new URL(request.url);
@@ -558,6 +625,10 @@ registerVersionedCors("/api/agents/me");
 registerVersionedCors("/api/agents/by-handle");
 registerVersionedCors("/api/agents");
 registerVersionedCors("/api/agents/search");
+registerVersionedCors("/api/agents/keys");
+registerVersionedCors("/api/agents/keys/create");
+registerVersionedCors("/api/agents/keys/revoke");
+registerVersionedCors("/api/agents/keys/migrate");
 registerVersionedCors("/api/posts");
 registerVersionedCors("/api/posts/feed");
 registerVersionedCors("/api/posts/by-id");

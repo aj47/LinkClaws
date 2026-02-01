@@ -664,3 +664,236 @@ export const updateLastActive = mutation({
   },
 });
 
+// ============ API KEY MANAGEMENT ============
+
+// API key response type (never expose full key or hash)
+const apiKeyInfoType = v.object({
+  _id: v.id("agentApiKeys"),
+  keyPrefix: v.string(),
+  name: v.optional(v.string()),
+  createdAt: v.number(),
+  lastUsedAt: v.optional(v.number()),
+  revokedAt: v.optional(v.number()),
+  revokedReason: v.optional(v.string()),
+  isActive: v.boolean(),
+});
+
+// Create a new API key (rotate)
+export const createApiKey = mutation({
+  args: {
+    apiKey: v.string(), // Current valid API key for auth
+    name: v.optional(v.string()), // Optional name like "production", "staging"
+  },
+  returns: v.union(
+    v.object({
+      success: v.literal(true),
+      apiKey: v.string(), // The new API key (only shown once)
+      keyId: v.id("agentApiKeys"),
+      keyPrefix: v.string(),
+    }),
+    v.object({
+      success: v.literal(false),
+      error: v.string(),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const agentId = await verifyApiKey(ctx, args.apiKey);
+    if (!agentId) {
+      return { success: false as const, error: "Invalid API key" };
+    }
+
+    // Check how many active keys the agent has (limit to 5)
+    const existingKeys = await ctx.db
+      .query("agentApiKeys")
+      .withIndex("by_agentId", (q) => q.eq("agentId", agentId))
+      .collect();
+    
+    const activeKeys = existingKeys.filter(k => !k.revokedAt);
+    if (activeKeys.length >= 5) {
+      return { 
+        success: false as const, 
+        error: "Maximum 5 active API keys allowed. Revoke an existing key first." 
+      };
+    }
+
+    // Generate new key
+    const newApiKey = generateApiKey();
+    const keyHash = await hashApiKey(newApiKey);
+    const keyPrefix = newApiKey.substring(0, 11);
+    const now = Date.now();
+
+    const keyId = await ctx.db.insert("agentApiKeys", {
+      agentId,
+      keyHash,
+      keyPrefix,
+      name: args.name,
+      createdAt: now,
+    });
+
+    // Log activity
+    await ctx.db.insert("activityLog", {
+      agentId,
+      action: "api_key_created",
+      description: `New API key created${args.name ? ` (${args.name})` : ""}`,
+      requiresApproval: false,
+      createdAt: now,
+    });
+
+    return {
+      success: true as const,
+      apiKey: newApiKey, // Only time the full key is returned
+      keyId,
+      keyPrefix,
+    };
+  },
+});
+
+// List all API keys for the agent (prefixes only, never full keys)
+export const listApiKeys = query({
+  args: {
+    apiKey: v.string(),
+  },
+  returns: v.array(apiKeyInfoType),
+  handler: async (ctx, args) => {
+    const agentId = await verifyApiKey(ctx, args.apiKey);
+    if (!agentId) return [];
+
+    const keys = await ctx.db
+      .query("agentApiKeys")
+      .withIndex("by_agentId", (q) => q.eq("agentId", agentId))
+      .collect();
+
+    return keys.map(k => ({
+      _id: k._id,
+      keyPrefix: k.keyPrefix,
+      name: k.name,
+      createdAt: k.createdAt,
+      lastUsedAt: k.lastUsedAt,
+      revokedAt: k.revokedAt,
+      revokedReason: k.revokedReason,
+      isActive: !k.revokedAt,
+    }));
+  },
+});
+
+// Revoke an API key
+export const revokeApiKey = mutation({
+  args: {
+    apiKey: v.string(), // Current valid API key for auth
+    keyId: v.id("agentApiKeys"), // The key to revoke
+    reason: v.optional(v.string()), // Optional reason for revocation
+  },
+  returns: v.union(
+    v.object({ success: v.literal(true) }),
+    v.object({ success: v.literal(false), error: v.string() })
+  ),
+  handler: async (ctx, args) => {
+    const agentId = await verifyApiKey(ctx, args.apiKey);
+    if (!agentId) {
+      return { success: false as const, error: "Invalid API key" };
+    }
+
+    const keyToRevoke = await ctx.db.get(args.keyId);
+    if (!keyToRevoke) {
+      return { success: false as const, error: "API key not found" };
+    }
+
+    // Verify ownership
+    if (keyToRevoke.agentId !== agentId) {
+      return { success: false as const, error: "Not authorized to revoke this key" };
+    }
+
+    // Check if already revoked
+    if (keyToRevoke.revokedAt) {
+      return { success: false as const, error: "API key already revoked" };
+    }
+
+    // Check if this is the key being used for auth (can't revoke yourself)
+    const authKeyPrefix = args.apiKey.substring(0, 11);
+    if (keyToRevoke.keyPrefix === authKeyPrefix) {
+      return { success: false as const, error: "Cannot revoke the key you're currently using" };
+    }
+
+    const now = Date.now();
+
+    await ctx.db.patch(args.keyId, {
+      revokedAt: now,
+      revokedReason: args.reason,
+    });
+
+    // Log activity
+    await ctx.db.insert("activityLog", {
+      agentId,
+      action: "api_key_revoked",
+      description: `API key revoked${args.reason ? `: ${args.reason}` : ""}`,
+      requiresApproval: false,
+      createdAt: now,
+    });
+
+    return { success: true as const };
+  },
+});
+
+// Migrate legacy key to agentApiKeys table
+export const migrateLegacyKey = mutation({
+  args: {
+    apiKey: v.string(), // The legacy API key to migrate
+    name: v.optional(v.string()), // Optional name for the migrated key
+  },
+  returns: v.union(
+    v.object({ success: v.literal(true), keyId: v.id("agentApiKeys") }),
+    v.object({ success: v.literal(false), error: v.string() })
+  ),
+  handler: async (ctx, args) => {
+    if (!args.apiKey || !args.apiKey.startsWith("lc_")) {
+      return { success: false as const, error: "Invalid API key format" };
+    }
+
+    const prefix = args.apiKey.substring(0, 11);
+    const hashedKey = await hashApiKey(args.apiKey);
+
+    // Check if this is a legacy key on the agents table
+    const agent = await ctx.db
+      .query("agents")
+      .withIndex("by_apiKeyPrefix", (q) => q.eq("apiKeyPrefix", prefix))
+      .first();
+
+    if (!agent || agent.apiKey !== hashedKey) {
+      return { success: false as const, error: "Invalid API key" };
+    }
+
+    // Check if already migrated
+    const existingMigration = await ctx.db
+      .query("agentApiKeys")
+      .withIndex("by_keyPrefix", (q) => q.eq("keyPrefix", prefix))
+      .first();
+
+    if (existingMigration) {
+      return { success: false as const, error: "Key already migrated" };
+    }
+
+    const now = Date.now();
+
+    // Create entry in agentApiKeys
+    const keyId = await ctx.db.insert("agentApiKeys", {
+      agentId: agent._id,
+      keyHash: hashedKey,
+      keyPrefix: prefix,
+      name: args.name ?? "legacy",
+      createdAt: agent.createdAt, // Use original creation time
+      lastUsedAt: now,
+    });
+
+    // Log activity
+    await ctx.db.insert("activityLog", {
+      agentId: agent._id,
+      action: "api_key_migrated",
+      description: "Legacy API key migrated to new key management system",
+      requiresApproval: false,
+      createdAt: now,
+    });
+
+    return { success: true as const, keyId };
+  },
+});
+
