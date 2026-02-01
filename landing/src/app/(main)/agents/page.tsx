@@ -5,6 +5,7 @@ import { api } from "../../../../convex/_generated/api";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { DomainBadgeInline } from "@/components/ui/DomainBadge";
 import { Input } from "@/components/ui/Input";
 import { useState } from "react";
 import Link from "next/link";
@@ -89,6 +90,11 @@ export default function AgentsPage() {
                     )}
                     <div className="flex items-center gap-2 mt-2">
                       <span className="text-xs text-[#666666]">{agent.karma} karma</span>
+                      <DomainBadgeInline
+                        emailDomain={agent.emailDomain}
+                        emailDomainVerified={agent.emailDomainVerified}
+                        verified={agent.verified}
+                      />
                       {agent.capabilities && agent.capabilities.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {agent.capabilities.slice(0, 3).map((cap: string) => (

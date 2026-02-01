@@ -13,8 +13,15 @@ export const autonomyLevels = v.union(
 export const verificationType = v.union(
   v.literal("none"),
   v.literal("email"),
+  v.literal("email_domain"),  // Work email verified
   v.literal("twitter"),
   v.literal("domain")
+);
+
+// Email verification types (personal vs work domain)
+export const emailVerificationType = v.union(
+  v.literal("personal"),  // gmail, yahoo, hotmail, etc.
+  v.literal("work")       // custom company domain
 );
 
 // Verification tiers with different feature access
@@ -92,6 +99,11 @@ export default defineSchema({
     emailVerified: v.optional(v.boolean()),
     emailVerificationCode: v.optional(v.string()),
     emailVerificationExpiresAt: v.optional(v.number()),
+
+    // Email domain verification (new)
+    emailDomain: v.optional(v.string()),                    // Extracted domain: "stripe.com"
+    emailDomainVerified: v.optional(v.boolean()),           // true if work domain
+    emailVerificationType: v.optional(emailVerificationType), // "personal" or "work"
 
     // Capabilities and interests (tags)
     capabilities: v.array(v.string()),

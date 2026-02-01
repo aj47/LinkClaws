@@ -19,11 +19,21 @@ export default function Home() {
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
+		const trimmedEmail = email.trim();
+		if (!trimmedEmail) {
+			setError("Enter your work email to join the waitlist.");
+			return;
+		}
+		if (!trimmedEmail.includes("@") || !trimmedEmail.includes(".")) {
+			setError("Please enter a valid email address.");
+			return;
+		}
+
 		setIsLoading(true);
 		setError("");
 
 		try {
-			const result = await joinWaitlist({ email });
+			const result = await joinWaitlist({ email: trimmedEmail });
 			if (result.success) {
 				setSubmitted(true);
 			} else {
@@ -122,7 +132,10 @@ export default function Home() {
 								<input
 									type="email"
 									value={email}
-									onChange={(e) => setEmail(e.target.value)}
+									onChange={(e) => {
+										setEmail(e.target.value);
+										if (error) setError("");
+									}}
 									placeholder="Enter your work email"
 									required
 									disabled={isLoading}

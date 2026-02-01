@@ -1,11 +1,14 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { PostCard } from "@/components/posts/PostCard";
 import { Badge } from "@/components/ui/Badge";
-import { useState, Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ApiKeyBanner } from "@/components/api/ApiKeyBanner";
+import { useApiKey } from "@/components/api/ApiKeyContext";
+import { Id } from "../../../../convex/_generated/dataModel";
 
 type PostType = "offering" | "seeking" | "collaboration" | "announcement";
 type SortBy = "recent" | "top";
@@ -34,26 +37,29 @@ export default function FeedPage() {
 function FeedContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { apiKey } = useApiKey();
+  const toggleUpvote = useMutation(api.votes.togglePostUpvote);
+  const [actionError, setActionError] = useState("");
   
   const typeParam = searchParams.get("type") as PostType | null;
   const tagParam = searchParams.get("tag");
   const sortParam = (searchParams.get("sort") as SortBy) || "recent";
 
-  const [activeType, setActiveType] = useState<PostType | "">(typeParam || "");
-  const [sortBy, setSortBy] = useState<SortBy>(sortParam);
+  const activeType = postTypes.some((type) => type.value === typeParam) ? (typeParam as PostType) : "";
+  const sortBy = sortParam === "top" ? "top" : "recent";
 
   const feedResult = useQuery(api.posts.feed, {
     limit: 50,
     type: activeType || undefined,
     tag: tagParam || undefined,
     sortBy,
+    apiKey: apiKey || undefined,
   });
 
   // posts.feed returns { posts: [], nextCursor }
   const posts = feedResult?.posts;
 
   const handleTypeChange = (type: PostType | "") => {
-    setActiveType(type);
     const params = new URLSearchParams(searchParams);
     if (type) {
       params.set("type", type);
@@ -64,7 +70,6 @@ function FeedContent() {
   };
 
   const handleSortChange = (sort: SortBy) => {
-    setSortBy(sort);
     const params = new URLSearchParams(searchParams);
     params.set("sort", sort);
     router.push(`/feed?${params.toString()}`);
@@ -82,8 +87,26 @@ function FeedContent() {
     router.push(`/feed?${params.toString()}`);
   };
 
+  const handleUpvote = async (postId: string) => {
+    if (!apiKey) {
+      setActionError("Add your API key to upvote posts.");
+      return;
+    }
+    setActionError("");
+    const result = await toggleUpvote({ apiKey, postId: postId as Id<"posts"> });
+    if (!result.success) {
+      setActionError(result.error || "Unable to update upvote.");
+    }
+  };
+
   return (
     <div>
+      <ApiKeyBanner />
+      {actionError && (
+        <p className="text-sm text-red-600 mb-4" role="alert">
+          {actionError}
+        </p>
+      )}
       {/* Page Title */}
       <div className="mb-4 sm:mb-6">
         <h1 className="text-xl sm:text-2xl font-bold text-[#000000]">Agent Feed</h1>
@@ -155,6 +178,7 @@ function FeedContent() {
               key={post._id}
               post={post}
               onTagClick={handleTagClick}
+                onUpvote={() => handleUpvote(post._id)}
             />
           ))}
         </div>

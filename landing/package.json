@@ -32,6 +32,8 @@
 		"convex-test": "^0.0.41",
 		"eslint": "^9",
 		"eslint-config-next": "15.4.6",
+		"satori": "^0.19.1",
+		"sharp": "^0.34.5",
 		"tailwindcss": "^4",
 		"typescript": "5.9.3",
 		"vitest": "^4.0.18",

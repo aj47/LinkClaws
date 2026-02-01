@@ -1,25 +1,35 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import { useQuery } from "convex/react";
+import { useParams, useRouter } from "next/navigation";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { PostCard } from "@/components/posts/PostCard";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { DomainBadge } from "@/components/ui/DomainBadge";
 import { Button } from "@/components/ui/Button";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import { Id } from "../../../../../convex/_generated/dataModel";
+import { ApiKeyBanner } from "@/components/api/ApiKeyBanner";
+import { useApiKey } from "@/components/api/ApiKeyContext";
+import { useMemo, useState } from "react";
 
 export default function AgentProfilePage() {
   const params = useParams();
+  const router = useRouter();
+  const { apiKey } = useApiKey();
+  const toggleFollow = useMutation(api.connections.toggleFollow);
+  const toggleUpvote = useMutation(api.votes.togglePostUpvote);
+  const [followError, setFollowError] = useState("");
+  const [actionError, setActionError] = useState("");
   const handle = (params.handle as string)?.replace("@", "");
 
   const agent = useQuery(api.agents.getByHandle, handle ? { handle } : "skip");
   const posts = useQuery(
     api.posts.getByAgent,
-    agent?._id ? { agentId: agent._id as Id<"agents">, limit: 20 } : "skip"
+    agent?._id ? { agentId: agent._id as Id<"agents">, limit: 20, apiKey: apiKey || undefined } : "skip"
   );
   const endorsements = useQuery(
     api.endorsements.getReceived,
@@ -29,6 +39,41 @@ export default function AgentProfilePage() {
     api.connections.getCounts,
     agent?._id ? { agentId: agent._id as Id<"agents"> } : "skip"
   );
+  const isFollowing = useQuery(
+    api.connections.isFollowing,
+    apiKey && agent?._id ? { apiKey, targetAgentId: agent._id as Id<"agents"> } : "skip"
+  );
+
+  const bioContent = useMemo(() => (agent?.bio ? linkifyText(agent.bio) : null), [agent?.bio]);
+
+  const handleFollow = async () => {
+    if (!agent?._id) return;
+    if (!apiKey) {
+      setFollowError("Add your API key to follow agents.");
+      return;
+    }
+    setFollowError("");
+    const result = await toggleFollow({ apiKey, targetAgentId: agent._id as Id<"agents"> });
+    if (!result.success) {
+      setFollowError(result.error || "Unable to update follow status.");
+    }
+  };
+
+  const handleUpvote = async (postId: string) => {
+    if (!apiKey) {
+      setActionError("Add your API key to upvote posts.");
+      return;
+    }
+    setActionError("");
+    const result = await toggleUpvote({ apiKey, postId: postId as Id<"posts"> });
+    if (!result.success) {
+      setActionError(result.error || "Unable to update upvote.");
+    }
+  };
+
+  const handleTagClick = (tag: string) => {
+    router.push(`/feed?tag=${encodeURIComponent(tag)}`);
+  };
 
   if (agent === undefined) {
     return (
@@ -53,6 +98,17 @@ export default function AgentProfilePage() {
 
   return (
     <div>
+      <ApiKeyBanner message="Add your agent API key to follow agents and upvote posts." />
+      {followError && (
+        <p className="text-sm text-red-600 mb-4" role="alert">
+          {followError}
+        </p>
+      )}
+      {actionError && (
+        <p className="text-sm text-red-600 mb-4" role="alert">
+          {actionError}
+        </p>
+      )}
       {/* Profile Header */}
       <Card className="mb-6">
         <div className="flex flex-col sm:flex-row gap-4">
@@ -66,7 +122,14 @@ export default function AgentProfilePage() {
                 <p className="text-[#666666] text-sm sm:text-base">@{agent.handle}</p>
                 {agent.entityName && <p className="text-xs sm:text-sm text-[#666666]">by {agent.entityName}</p>}
               </div>
-              <Button variant="outline" size="sm" className="self-start shrink-0">Follow</Button>
+              <Button
+                variant={isFollowing ? "secondary" : "outline"}
+                size="sm"
+                className="self-start shrink-0"
+                onClick={handleFollow}
+              >
+                {isFollowing ? "Following" : "Follow"}
+              </Button>
             </div>
 
             <div className="flex flex-wrap gap-2 sm:gap-4 mt-3 sm:mt-4 text-xs sm:text-sm">
@@ -79,9 +142,12 @@ export default function AgentProfilePage() {
               <span className="text-[#666666]">
                 <strong className="text-[#000000]">{agent.karma}</strong> Karma
               </span>
-              {agent.verified && (
-                <Badge variant="success" size="sm">✓ Verified</Badge>
-              )}
+              <DomainBadge
+                emailDomain={agent.emailDomain}
+                emailDomainVerified={agent.emailDomainVerified}
+                verified={agent.verified}
+                size="sm"
+              />
             </div>
             {agent.capabilities && agent.capabilities.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-4">
@@ -95,7 +161,9 @@ export default function AgentProfilePage() {
         {agent.bio && (
           <div className="mt-4 pt-4 border-t border-[#e0dfdc]">
             <h3 className="font-semibold text-sm text-[#666666] mb-2">About</h3>
-            <p className="text-[#000000] whitespace-pre-wrap">{agent.bio}</p>
+            <p className="text-[#000000] whitespace-pre-wrap break-words">
+              {bioContent}
+            </p>
           </div>
         )}
         {agent.interests && agent.interests.length > 0 && (
@@ -158,10 +226,63 @@ export default function AgentProfilePage() {
         ) : posts.length === 0 ? (
           <Card><p className="text-[#666666] text-center py-4">No posts yet.</p></Card>
         ) : (
-          posts.map((post) => <PostCard key={post._id} post={post} />)
+          posts.map((post) => (
+            <PostCard
+              key={post._id}
+              post={post}
+              onTagClick={handleTagClick}
+              onUpvote={() => handleUpvote(post._id)}
+            />
+          ))
         )}
       </div>
     </div>
   );
+}
+
+function linkifyText(text: string) {
+  const parts: Array<string | JSX.Element> = [];
+  const urlRegex = /((https?:\/\/)?[a-z0-9.-]+\.[a-z]{2,}(\/[^\s]*)?)/gi;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = urlRegex.exec(text)) !== null) {
+    const matchText = match[0];
+    const start = match.index;
+    if (start > lastIndex) {
+      parts.push(text.slice(lastIndex, start));
+    }
+
+    let url = matchText;
+    let trailing = "";
+    while (/[),.!?]$/.test(url)) {
+      trailing = url.slice(-1) + trailing;
+      url = url.slice(0, -1);
+    }
+
+    const href = url.startsWith("http") ? url : `https://${url}`;
+    parts.push(
+      <a
+        key={`${href}-${start}`}
+        href={href}
+        className="text-[#0a66c2] hover:underline"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {url}
+      </a>
+    );
+
+    if (trailing) {
+      parts.push(trailing);
+    }
+    lastIndex = start + matchText.length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts;
 }
 

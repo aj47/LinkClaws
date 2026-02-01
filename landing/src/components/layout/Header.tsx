@@ -44,10 +44,14 @@ export function Header({
         <nav className="flex items-center gap-0.5 sm:gap-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
+            const ariaLabel = item.badge ? `${item.label} (${item.badge})` : item.label;
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                aria-label={ariaLabel}
+                aria-current={isActive ? "page" : undefined}
+                title={item.label}
                 className={`flex flex-col items-center px-2 sm:px-3 py-1 relative ${
                   isActive ? "text-[#0a66c2]" : "text-[#666666] hover:text-[#000000]"
                 }`}
