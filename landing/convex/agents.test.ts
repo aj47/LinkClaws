@@ -8,9 +8,6 @@ process.env.ADMIN_SECRET = TEST_ADMIN_SECRET;
 
 const modules = import.meta.glob("./**/*.ts");
 
-// Test admin secret - should match ADMIN_SECRET env var in test environment
-const TEST_ADMIN_SECRET = process.env.ADMIN_SECRET || "test-admin-secret";
-
 describe("agents", () => {
   describe("register", () => {
     test("should register a new agent with valid invite code", async () => {
@@ -155,6 +152,99 @@ describe("agents", () => {
       const t = convexTest(schema, modules);
       const agent = await t.query(api.agents.getByHandle, { handle: "nonexistent" });
       expect(agent).toBeNull();
+    });
+  });
+
+  describe("search", () => {
+    test("should search agents by name using search index", async () => {
+      const t = convexTest(schema, modules);
+
+      // Create agent
+      const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
+        adminSecret: TEST_ADMIN_SECRET,
+        count: 1,
+      });
+      await t.mutation(api.agents.register, {
+        inviteCode: inviteCodes[0],
+        name: "SearchableAgent",
+        handle: "searchable",
+        entityName: "Search Company",
+        capabilities: ["machine-learning", "nlp"],
+        interests: ["ai-research"],
+        autonomyLevel: "full_autonomy",
+        notificationMethod: "polling",
+      });
+
+      // Search by name
+      const result = await t.query(api.agents.search, { query: "SearchableAgent" });
+
+      expect(result.agents.length).toBeGreaterThanOrEqual(1);
+      expect(result.agents[0].name).toBe("SearchableAgent");
+      expect(result.hasMore).toBe(false);
+    });
+
+    test("should search agents by capability", async () => {
+      const t = convexTest(schema, modules);
+
+      // Create agent
+      const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
+        adminSecret: TEST_ADMIN_SECRET,
+        count: 1,
+      });
+      await t.mutation(api.agents.register, {
+        inviteCode: inviteCodes[0],
+        name: "MLAgent",
+        handle: "mlagent",
+        entityName: "ML Corp",
+        capabilities: ["deep-learning", "computer-vision"],
+        interests: ["robotics"],
+        autonomyLevel: "full_autonomy",
+        notificationMethod: "polling",
+      });
+
+      // Search by capability
+      const result = await t.query(api.agents.search, { query: "deep-learning" });
+
+      expect(result.agents.length).toBeGreaterThanOrEqual(1);
+      expect(result.agents[0].handle).toBe("mlagent");
+    });
+
+    test("should return empty results for empty query", async () => {
+      const t = convexTest(schema, modules);
+
+      const result = await t.query(api.agents.search, { query: "" });
+
+      expect(result.agents).toHaveLength(0);
+      expect(result.hasMore).toBe(false);
+    });
+
+    test("should respect limit parameter", async () => {
+      const t = convexTest(schema, modules);
+
+      // Create multiple agents
+      const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
+        adminSecret: TEST_ADMIN_SECRET,
+        count: 3,
+      });
+
+      for (let i = 0; i < 3; i++) {
+        await t.mutation(api.agents.register, {
+          inviteCode: inviteCodes[i],
+          name: `LimitTestAgent${i}`,
+          handle: `limittest${i}`,
+          entityName: "Limit Company",
+          capabilities: ["testing"],
+          interests: ["pagination"],
+          autonomyLevel: "full_autonomy",
+          notificationMethod: "polling",
+        });
+      }
+
+      // Search with limit
+      const result = await t.query(api.agents.search, { query: "LimitTestAgent", limit: 2 });
+
+      expect(result.agents.length).toBe(2);
+      expect(result.hasMore).toBe(true);
     });
   });
 });

@@ -17,12 +17,12 @@ export default function AgentsPage() {
   const agentsList = useQuery(api.agents.list, { limit: 50, verifiedOnly });
   const searchResults = useQuery(
     api.agents.search,
-    searchQuery.length >= 2 ? { query: searchQuery, limit: 20 } : "skip"
+    searchQuery.length >= 2 ? { query: searchQuery, limit: 20, verifiedOnly } : "skip"
   );
 
-  // agents.list returns { agents: [], nextCursor } while search returns an array directly
+  // Both agents.list and search now return { agents: [], ... }
   const displayedAgents = searchQuery.length >= 2
-    ? searchResults
+    ? searchResults?.agents
     : (agentsList?.agents ?? undefined);
 
   return (

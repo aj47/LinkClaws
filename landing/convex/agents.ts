@@ -12,6 +12,25 @@ import { extractEmailDomain, classifyEmailDomain } from "./lib/emailDomains";
 import { autonomyLevels, verificationType, verificationTier, emailVerificationType } from "./schema";
 
 // Register a new agent
+// Helper to build searchable text from agent fields
+function buildSearchableText(agent: {
+  name: string;
+  handle: string;
+  entityName: string;
+  bio?: string;
+  capabilities: string[];
+  interests: string[];
+}): string {
+  return [
+    agent.name,
+    agent.handle,
+    agent.entityName,
+    agent.bio ?? "",
+    ...agent.capabilities,
+    ...agent.interests,
+  ].join(" ").toLowerCase();
+}
+
 export const register = mutation({
   args: {
     inviteCode: v.string(),
@@ -23,10 +42,12 @@ export const register = mutation({
     capabilities: v.array(v.string()),
     interests: v.array(v.string()),
     autonomyLevel: autonomyLevels,
-    notificationMethod: v.optional(v.union(
-      v.literal("websocket"),
-      v.literal("polling")
-    )),
+    notificationMethod: v.optional(
+      v.union(
+        v.literal("websocket"),
+        v.literal("polling")
+      )
+    ),
   },
   returns: v.union(
     v.object({
@@ -92,6 +113,16 @@ export const register = mutation({
       emailVerificationExpiresAt = now + 24 * 60 * 60 * 1000; // 24 hours
     }
 
+    // Build searchable text for search index
+    const searchableText = buildSearchableText({
+      name: args.name,
+      handle: args.handle.toLowerCase(),
+      entityName: args.entityName,
+      bio: args.bio,
+      capabilities: args.capabilities,
+      interests: args.interests,
+    });
+
     // Create the agent
     const agentId = await ctx.db.insert("agents", {
       name: args.name,
@@ -115,6 +146,7 @@ export const register = mutation({
       inviteCodesRemaining: 0, // Unverified agents get no invite codes
       canInvite: false,
       notificationMethod: args.notificationMethod ?? "polling",
+      searchableText,
       createdAt: now,
       updatedAt: now,
       lastActiveAt: now,
@@ -281,7 +313,7 @@ export const updateProfile = mutation({
     interests: v.optional(v.array(v.string())),
     autonomyLevel: v.optional(autonomyLevels),
     notificationMethod: v.optional(
-      v.union(v.literal("websocket"), v.literal("polling"))
+      v.union(v.literal("websocket"), v.literal("polling"), v.literal("webhook"))
     ),
   },
   returns: v.union(
@@ -294,6 +326,11 @@ export const updateProfile = mutation({
       return { success: false as const, error: "Invalid API key" };
     }
 
+    const agent = await ctx.db.get(agentId);
+    if (!agent) {
+      return { success: false as const, error: "Agent not found" };
+    }
+
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
 
     if (args.name !== undefined) updates.name = args.name;
@@ -303,6 +340,24 @@ export const updateProfile = mutation({
     if (args.interests !== undefined) updates.interests = args.interests;
     if (args.autonomyLevel !== undefined) updates.autonomyLevel = args.autonomyLevel;
     if (args.notificationMethod !== undefined) updates.notificationMethod = args.notificationMethod;
+
+    // Rebuild searchable text if any searchable field changed
+    const searchableFieldsChanged =
+      args.name !== undefined ||
+      args.bio !== undefined ||
+      args.capabilities !== undefined ||
+      args.interests !== undefined;
+
+    if (searchableFieldsChanged) {
+      updates.searchableText = buildSearchableText({
+        name: args.name ?? agent.name,
+        handle: agent.handle,
+        entityName: agent.entityName,
+        bio: args.bio ?? agent.bio,
+        capabilities: args.capabilities ?? agent.capabilities,
+        interests: args.interests ?? agent.interests,
+      });
+    }
 
     await ctx.db.patch(agentId, updates);
 
@@ -336,7 +391,8 @@ export const getMe = query({
       canInvite: v.boolean(),
       notificationMethod: v.union(
         v.literal("websocket"),
-        v.literal("polling")
+        v.literal("polling"),
+        v.literal("webhook")
       ),
       createdAt: v.number(),
       lastActiveAt: v.number(),
@@ -379,36 +435,46 @@ export const getMe = query({
   },
 });
 
-// Search agents by capabilities or interests
+// Search agents using search index with pagination
 export const search = query({
   args: {
     query: v.string(),
     limit: v.optional(v.number()),
+    verifiedOnly: v.optional(v.boolean()),
   },
-  returns: v.array(publicAgentType),
+  returns: v.object({
+    agents: v.array(publicAgentType),
+    hasMore: v.boolean(),
+  }),
   handler: async (ctx, args) => {
     const limit = args.limit ?? 20;
-    const searchTerm = args.query.toLowerCase();
+    const searchTerm = args.query.trim();
 
-    // Get all agents and filter (in production, use a search index)
-    const allAgents = await ctx.db.query("agents").take(1000);
+    // If search term is empty, return empty results
+    if (!searchTerm) {
+      return { agents: [], hasMore: false };
+    }
 
-    const matchingAgents = allAgents.filter((agent) => {
-      const searchableText = [
-        agent.name,
-        agent.handle,
-        agent.entityName,
-        agent.bio ?? "",
-        ...agent.capabilities,
-        ...agent.interests,
-      ]
-        .join(" ")
-        .toLowerCase();
+    // Use Convex search index for efficient querying
+    let searchQuery = ctx.db
+      .query("agents")
+      .withSearchIndex("search_agents", (q) => {
+        let sq = q.search("searchableText", searchTerm);
+        if (args.verifiedOnly) {
+          sq = sq.eq("verified", true);
+        }
+        return sq;
+      });
 
-      return searchableText.includes(searchTerm);
-    });
+    const agents = await searchQuery.take(limit + 1);
 
-    return matchingAgents.slice(0, limit).map(formatPublicAgent);
+    const hasMore = agents.length > limit;
+    const resultAgents = hasMore ? agents.slice(0, limit) : agents;
+
+    return {
+      agents: resultAgents.map(formatPublicAgent),
+      hasMore,
+    };
   },
 });
 
@@ -675,3 +741,63 @@ export const updateLastActive = mutation({
   },
 });
 
+
+
+// Migration: Backfill searchableText for existing agents
+// Run this once after deploying the search index feature
+export const migrateSearchableText = mutation({
+  args: {
+    adminSecret: v.string(),
+    batchSize: v.optional(v.number()),
+  },
+  returns: v.object({
+    updated: v.number(),
+    remaining: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    // Require admin authentication - ADMIN_SECRET must be set in environment
+    const adminSecret = process.env.ADMIN_SECRET;
+    if (!adminSecret) {
+      throw new Error("ADMIN_SECRET environment variable is not set");
+    }
+
+    if (args.adminSecret !== adminSecret) {
+      throw new Error("Unauthorized");
+    }
+
+    const batchSize = args.batchSize ?? 100;
+
+    // Find agents without searchableText
+    const agentsToUpdate = await ctx.db
+      .query("agents")
+      .filter((q) => q.eq(q.field("searchableText"), undefined))
+      .take(batchSize);
+
+    let updated = 0;
+    for (const agent of agentsToUpdate) {
+      const searchableText = buildSearchableText({
+        name: agent.name,
+        handle: agent.handle,
+        entityName: agent.entityName,
+        bio: agent.bio,
+        capabilities: agent.capabilities,
+        interests: agent.interests,
+      });
+
+      await ctx.db.patch(agent._id, { searchableText });
+      updated++;
+    }
+
+    // Check if more agents remain (just check if at least one exists)
+    // This avoids loading all remaining agents into memory
+    const hasMore = await ctx.db
+      .query("agents")
+      .filter((q) => q.eq(q.field("searchableText"), undefined))
+      .first();
+
+    return {
+      updated,
+      remaining: hasMore ? 1 : 0,  // 1 indicates more exist, 0 means done
+    };
+  },
+});

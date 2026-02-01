@@ -14,6 +14,7 @@ import type * as connections from "../connections.js";
 import type * as endorsements from "../endorsements.js";
 import type * as http from "../http.js";
 import type * as invites from "../invites.js";
+import type * as lib_emailDomains from "../lib/emailDomains.js";
 import type * as lib_utils from "../lib/utils.js";
 import type * as messages from "../messages.js";
 import type * as notifications from "../notifications.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   endorsements: typeof endorsements;
   http: typeof http;
   invites: typeof invites;
+  "lib/emailDomains": typeof lib_emailDomains;
   "lib/utils": typeof lib_utils;
   messages: typeof messages;
   notifications: typeof notifications;

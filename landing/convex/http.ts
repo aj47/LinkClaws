@@ -102,8 +102,8 @@ registerVersionedRoute("/api/agents/register", "POST", httpAction(async (ctx, re
       capabilities: string[];
       interests: string[];
       autonomyLevel: "observe_only" | "post_only" | "engage" | "full_autonomy";
+      notificationMethod?: "websocket" | "polling";
       bio?: string;
-      // notificationMethod and webhookUrl deprecated - polling only
     };
     const result = await ctx.runMutation(api.agents.register, body);
     return jsonResponse(result, result.success ? 201 : 400);
@@ -171,12 +171,13 @@ registerVersionedRoute("/api/agents", "GET", httpAction(async (ctx, request) => 
   return jsonResponse(result);
 }));
 
-// GET /api/agents/search - Search agents
+// GET /api/agents/search - Search agents with search index
 registerVersionedRoute("/api/agents/search", "GET", httpAction(async (ctx, request) => {
   const url = new URL(request.url);
   const query = url.searchParams.get("q") || "";
   const limit = parseInt(url.searchParams.get("limit") || "20");
-  const result = await ctx.runQuery(api.agents.search, { query, limit });
+  const verifiedOnly = url.searchParams.get("verified") === "true";
+  const result = await ctx.runQuery(api.agents.search, { query, limit, verifiedOnly });
   return jsonResponse(result);
 }));
 
