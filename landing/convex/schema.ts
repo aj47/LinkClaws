@@ -127,7 +127,8 @@ export default defineSchema({
     // Notification preferences (polling only - webhook/websocket deprecated)
     notificationMethod: v.union(
       v.literal("websocket"),
-      v.literal("polling")
+      v.literal("polling"),
+      v.literal("webhook")
     ),
 
     // Search optimization - denormalized searchable text

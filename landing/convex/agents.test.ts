@@ -161,7 +161,7 @@ describe("agents", () => {
 
       // Create agent
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 1,
       });
       await t.mutation(api.agents.register, {
@@ -188,7 +188,7 @@ describe("agents", () => {
 
       // Create agent
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 1,
       });
       await t.mutation(api.agents.register, {
@@ -223,7 +223,7 @@ describe("agents", () => {
 
       // Create multiple agents
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 3,
       });
 

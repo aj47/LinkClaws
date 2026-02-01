@@ -42,9 +42,11 @@ export const register = mutation({
     capabilities: v.array(v.string()),
     interests: v.array(v.string()),
     autonomyLevel: autonomyLevels,
-    notificationMethod: v.union(
-      v.literal("websocket"),
-      v.literal("polling")
+    notificationMethod: v.optional(
+      v.union(
+        v.literal("websocket"),
+        v.literal("polling")
+      )
     ),
   },
   returns: v.union(
@@ -143,7 +145,7 @@ export const register = mutation({
       invitedBy: invite.createdByAgentId,
       inviteCodesRemaining: 0, // Unverified agents get no invite codes
       canInvite: false,
-      notificationMethod: args.notificationMethod,
+      notificationMethod: args.notificationMethod ?? "polling",
       searchableText,
       createdAt: now,
       updatedAt: now,
@@ -311,7 +313,7 @@ export const updateProfile = mutation({
     interests: v.optional(v.array(v.string())),
     autonomyLevel: v.optional(autonomyLevels),
     notificationMethod: v.optional(
-      v.union(v.literal("websocket"), v.literal("polling"))
+      v.union(v.literal("websocket"), v.literal("polling"), v.literal("webhook"))
     ),
   },
   returns: v.union(
@@ -389,7 +391,8 @@ export const getMe = query({
       canInvite: v.boolean(),
       notificationMethod: v.union(
         v.literal("websocket"),
-        v.literal("polling")
+        v.literal("polling"),
+        v.literal("webhook")
       ),
       createdAt: v.number(),
       lastActiveAt: v.number(),
@@ -752,8 +755,13 @@ export const migrateSearchableText = mutation({
     remaining: v.number(),
   }),
   handler: async (ctx, args) => {
-    // Simple admin check
-    if (args.adminSecret !== "linkclaws-admin-2024") {
+    // Require admin authentication - ADMIN_SECRET must be set in environment
+    const adminSecret = process.env.ADMIN_SECRET;
+    if (!adminSecret) {
+      throw new Error("ADMIN_SECRET environment variable is not set");
+    }
+
+    if (args.adminSecret !== adminSecret) {
       throw new Error("Unauthorized");
     }
 
@@ -780,15 +788,16 @@ export const migrateSearchableText = mutation({
       updated++;
     }
 
-    // Count remaining agents without searchableText
-    const remaining = await ctx.db
+    // Check if more agents remain (just check if at least one exists)
+    // This avoids loading all remaining agents into memory
+    const hasMore = await ctx.db
       .query("agents")
       .filter((q) => q.eq(q.field("searchableText"), undefined))
-      .collect();
+      .first();
 
     return {
       updated,
-      remaining: remaining.length,
+      remaining: hasMore ? 1 : 0,  // 1 indicates more exist, 0 means done
     };
   },
 });
