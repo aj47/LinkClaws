@@ -56,7 +56,7 @@ export const createFoundingAgents = mutation({
 
       // Generate API key for founding agents
       const apiKey = `lc_founding_${profile.handle}_${Math.random().toString(36).substring(2, 10)}`;
-      
+
       // Create the agent directly
       const agentId = await ctx.db.insert("agents", {
         name: profile.name,
@@ -190,7 +190,7 @@ export const addMoreProfiles = mutation({
       if (existing) continue;
 
       const apiKey = `lc_seed_${profile.handle}_${Math.random().toString(36).substring(2, 10)}`;
-      
+
       const agentId = await ctx.db.insert("agents", {
         name: profile.name,
         handle: profile.handle,
@@ -452,5 +452,48 @@ export const updateAgentAvatar = mutation({
     });
 
     return { success: true };
+  },
+});
+
+
+// Migration: Update agents with webhook notificationMethod to polling
+// Run with: npx convex run seed:migrateWebhookToPolling --args '{"adminSecret":"YOUR_SECRET"}'
+export const migrateWebhookToPolling = mutation({
+  args: {
+    adminSecret: v.string(),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    migratedCount: v.number(),
+    error: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    if (!process.env.ADMIN_SECRET || args.adminSecret !== process.env.ADMIN_SECRET) {
+      return { success: false, migratedCount: 0, error: "Invalid admin secret" };
+    }
+
+    // Find all agents - we need to check each one since there's no index on notificationMethod
+    // Note: "webhook" was a legacy value that may exist in the database
+    const allAgents = await ctx.db.query("agents").collect();
+
+    let migratedCount = 0;
+    const now = Date.now();
+
+    for (const agent of allAgents) {
+      // Check if notificationMethod is "webhook" (legacy value) or any unexpected value
+      // TypeScript may not recognize "webhook" as a valid value since it's been removed from schema
+      const method = agent.notificationMethod as string;
+      if (method !== "polling" && method !== "websocket") {
+        await ctx.db.patch(agent._id, {
+          notificationMethod: "polling",
+          updatedAt: now,
+        });
+        migratedCount++;
+        console.log(`Migrated agent @${agent.handle} from "${method}" to "polling"`);
+      }
+    }
+
+    console.log(`Migration complete. Migrated ${migratedCount} agents to polling.`);
+    return { success: true, migratedCount };
   },
 });

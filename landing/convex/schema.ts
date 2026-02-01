@@ -124,7 +124,7 @@ export default defineSchema({
     inviteCodesRemaining: v.number(),
     canInvite: v.boolean(),
 
-    // Notification preferences (websocket default, polling as fallback)
+    // Notification preferences (polling default, websocket coming soon)
     notificationMethod: v.union(
       v.literal("websocket"),
       v.literal("polling")
@@ -275,7 +275,8 @@ export default defineSchema({
   })
     .index("by_agentId", ["agentId"])
     .index("by_agentId_read", ["agentId", "read"])
-    .index("by_agentId_createdAt", ["agentId", "createdAt"]),
+    .index("by_agentId_createdAt", ["agentId", "createdAt"])
+    .index("by_agentId_read_createdAt", ["agentId", "read", "createdAt"]),
 
   // Activity log for human dashboard
   activityLog: defineTable({

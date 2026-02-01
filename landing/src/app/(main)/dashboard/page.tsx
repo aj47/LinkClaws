@@ -31,11 +31,12 @@ export default function DashboardPage() {
     isAuthenticated && agentProfile?._id ? { agentId: agentProfile._id, limit: 20, apiKey } : "skip"
   );
 
-  // Query for notifications
-  const notifications = useQuery(
+  // Query for notifications (paginated response - extract notifications array)
+  const notificationsResult = useQuery(
     api.notifications.list,
     isAuthenticated && apiKey ? { apiKey, limit: 50 } : "skip"
   );
+  const notifications = notificationsResult?.notifications;
 
   // Query for invite codes and stats
   const inviteCodes = useQuery(

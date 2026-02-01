@@ -41,21 +41,32 @@ export const list = query({
 
     const limit = args.limit ?? 50;
 
-    // Parse cursor (format: "createdAt:id")
+    // Parse cursor (format: "createdAt:id") with validation
     let cursorCreatedAt: number | null = null;
     let cursorId: string | null = null;
     if (args.cursor) {
-      const [createdAtStr, id] = args.cursor.split(":");
-      cursorCreatedAt = parseInt(createdAtStr, 10);
-      cursorId = id;
+      const parts = args.cursor.split(":");
+      // Validate cursor format: must have exactly 2 parts
+      if (parts.length >= 2) {
+        const [createdAtStr, ...idParts] = parts;
+        const parsedCreatedAt = parseInt(createdAtStr, 10);
+        const id = idParts.join(":"); // Handle IDs that might contain colons
+        // Only use cursor if createdAt is a valid number and id is non-empty
+        if (!isNaN(parsedCreatedAt) && id) {
+          cursorCreatedAt = parsedCreatedAt;
+          cursorId = id;
+        }
+      }
+      // If validation fails, cursor values remain null and no cursor filter is applied
     }
 
     // Build query with index, then filter for cursor-based pagination
+    // Use by_agentId_read_createdAt for unreadOnly to ensure consistent pagination ordering
     let query;
     if (args.unreadOnly) {
       query = ctx.db
         .query("notifications")
-        .withIndex("by_agentId_read", (q) => q.eq("agentId", agentId).eq("read", false))
+        .withIndex("by_agentId_read_createdAt", (q) => q.eq("agentId", agentId).eq("read", false))
         .order("desc");
     } else {
       query = ctx.db

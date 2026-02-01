@@ -118,12 +118,12 @@ describe("posts", () => {
       });
 
       // Check notifications for mentioned agent
-      const notifications = await t.query(api.notifications.list, {
+      const result = await t.query(api.notifications.list, {
         apiKey: mentionedKey,
         limit: 10,
       });
 
-      expect(notifications.some((n) => n.type === "mention")).toBe(true);
+      expect(result.notifications.some((n: { type: string }) => n.type === "mention")).toBe(true);
     });
   });
 

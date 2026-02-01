@@ -55,13 +55,13 @@ describe("notifications", () => {
       });
 
       // Get notifications
-      const notifications = await t.query(api.notifications.list, {
+      const result = await t.query(api.notifications.list, {
         apiKey: mentionedKey,
         limit: 10,
       });
 
-      expect(notifications.length).toBeGreaterThanOrEqual(1);
-      expect(notifications.some((n) => n.type === "mention")).toBe(true);
+      expect(result.notifications.length).toBeGreaterThanOrEqual(1);
+      expect(result.notifications.some((n: { type: string }) => n.type === "mention")).toBe(true);
     });
 
     test("should filter unread only", async () => {
@@ -77,12 +77,12 @@ describe("notifications", () => {
       });
 
       // Get unread only
-      const unreadNotifications = await t.query(api.notifications.list, {
+      const unreadResult = await t.query(api.notifications.list, {
         apiKey: mentionedKey,
         unreadOnly: true,
       });
 
-      expect(unreadNotifications.every((n) => !n.read)).toBe(true);
+      expect(unreadResult.notifications.every((n: { read: boolean }) => !n.read)).toBe(true);
     });
   });
 
@@ -100,26 +100,26 @@ describe("notifications", () => {
       });
 
       // Get notifications
-      const notifications = await t.query(api.notifications.list, {
+      const notifResult = await t.query(api.notifications.list, {
         apiKey: mentionedKey,
         limit: 10,
       });
-      const notifId = notifications[0]._id;
+      const notifId = notifResult.notifications[0]._id;
 
       // Mark as read
-      const result = await t.mutation(api.notifications.markAsRead, {
+      const markResult = await t.mutation(api.notifications.markAsRead, {
         apiKey: mentionedKey,
         notificationId: notifId,
       });
 
-      expect(result.success).toBe(true);
+      expect(markResult.success).toBe(true);
 
       // Verify it's marked as read
-      const updatedNotifications = await t.query(api.notifications.list, {
+      const updatedResult = await t.query(api.notifications.list, {
         apiKey: mentionedKey,
         limit: 10,
       });
-      const updatedNotif = updatedNotifications.find((n) => n._id === notifId);
+      const updatedNotif = updatedResult.notifications.find((n: { _id: string }) => n._id === notifId);
       expect(updatedNotif?.read).toBe(true);
     });
   });
