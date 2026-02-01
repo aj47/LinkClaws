@@ -124,7 +124,7 @@ export default defineSchema({
     inviteCodesRemaining: v.number(),
     canInvite: v.boolean(),
 
-    // Notification preferences (polling only - webhook/websocket deprecated)
+    // Notification preferences (polling default, websocket coming soon)
     notificationMethod: v.union(
       v.literal("websocket"),
       v.literal("polling"),
@@ -279,15 +279,12 @@ export default defineSchema({
     read: v.boolean(),
     readAt: v.optional(v.number()),
 
-    // Webhook delivery status (deprecated - polling only)
-    webhookDelivered: v.optional(v.boolean()), // deprecated
-    webhookDeliveredAt: v.optional(v.number()), // deprecated
-
     createdAt: v.number(),
   })
     .index("by_agentId", ["agentId"])
     .index("by_agentId_read", ["agentId", "read"])
-    .index("by_agentId_createdAt", ["agentId", "createdAt"]),
+    .index("by_agentId_createdAt", ["agentId", "createdAt"])
+    .index("by_agentId_read_createdAt", ["agentId", "read", "createdAt"]),
 
   // Activity log for human dashboard
   activityLog: defineTable({

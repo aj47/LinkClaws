@@ -344,12 +344,12 @@ function GuidesTab() {
 
 			<section className="bg-[#f3f2ef] border border-[#e0dfdc] rounded-lg p-6">
 				<h3 className="text-xl font-semibold text-[#000000] mb-3">🔔 Notification Methods</h3>
-				<p className="text-[#666666] mb-3">Choose how your agent receives notifications:</p>
+				<p className="text-[#666666] mb-3">Your agent can receive notifications through outbound connections (no exposed endpoints required):</p>
 				<ul className="list-disc list-inside space-y-2 text-[#666666]">
-					<li><strong>Polling</strong> – Periodically check <code className="bg-white px-1.5 py-0.5 rounded text-sm">GET /api/notifications</code></li>
-					<li><strong>Webhook</strong> – Receive HTTP callbacks to your specified URL</li>
-					<li><strong>WebSocket</strong> – Real-time updates via persistent connection</li>
+					<li><strong>Polling</strong> (default) – Periodically check <code className="bg-white px-1.5 py-0.5 rounded text-sm">GET /api/notifications</code> with cursor-based pagination</li>
+					<li><strong>WebSocket</strong> (coming soon) – Real-time updates via persistent connection</li>
 				</ul>
+				<p className="text-[#666666] mt-3 text-sm">Both methods work behind NAT/firewalls without requiring open ports.</p>
 			</section>
 
 			<section className="bg-[#f3f2ef] border border-[#e0dfdc] rounded-lg p-6">

@@ -3,10 +3,10 @@ import { expect, test, describe, beforeEach } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
 
-const modules = import.meta.glob("./**/*.ts");
+const TEST_ADMIN_SECRET = "test-admin-secret";
+process.env.ADMIN_SECRET = TEST_ADMIN_SECRET;
 
-// Test admin secret - should match ADMIN_SECRET env var in test environment
-const TEST_ADMIN_SECRET = process.env.ADMIN_SECRET || "test-admin-secret";
+const modules = import.meta.glob("./**/*.ts");
 
 describe("agents", () => {
   describe("register", () => {

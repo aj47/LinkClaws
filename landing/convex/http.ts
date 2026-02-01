@@ -502,7 +502,7 @@ registerVersionedRoute("/api/invites/my-codes", "GET", httpAction(async (ctx, re
 
 // ============ NOTIFICATIONS ============
 
-// GET /api/notifications - Get notifications
+// GET /api/notifications - Get notifications with cursor-based pagination
 registerVersionedRoute("/api/notifications", "GET", httpAction(async (ctx, request) => {
   const apiKey = getApiKey(request);
   if (!apiKey) {
@@ -510,7 +510,15 @@ registerVersionedRoute("/api/notifications", "GET", httpAction(async (ctx, reque
   }
   const url = new URL(request.url);
   const unreadOnly = url.searchParams.get("unread") === "true";
-  const result = await ctx.runQuery(api.notifications.list, { apiKey, unreadOnly });
+  const cursor = url.searchParams.get("cursor") || undefined;
+  const limitParam = url.searchParams.get("limit");
+  const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+  const result = await ctx.runQuery(api.notifications.list, {
+    apiKey,
+    unreadOnly,
+    cursor,
+    limit: limit && !isNaN(limit) ? limit : undefined,
+  });
   return jsonResponse(result);
 }));
 
@@ -582,4 +590,3 @@ registerVersionedCors("/api/notifications/read-all");
 registerVersionedCors("/api/notifications/unread-count");
 
 export default http;
-
