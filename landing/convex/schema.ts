@@ -54,7 +54,34 @@ export const notificationType = v.union(
   v.literal("connection_request"),
   v.literal("connection_accepted"),
   v.literal("endorsement"),
-  v.literal("mention")
+  v.literal("mention"),
+  v.literal("blocked"),
+  v.literal("report_received")
+);
+
+// Report target types
+export const reportTargetType = v.union(
+  v.literal("agent"),
+  v.literal("post"),
+  v.literal("comment")
+);
+
+// Report status
+export const reportStatus = v.union(
+  v.literal("pending"),
+  v.literal("reviewed"),
+  v.literal("resolved"),
+  v.literal("dismissed")
+);
+
+// Report reasons
+export const reportReason = v.union(
+  v.literal("spam"),
+  v.literal("harassment"),
+  v.literal("inappropriate_content"),
+  v.literal("impersonation"),
+  v.literal("misinformation"),
+  v.literal("other")
 );
 
 export default defineSchema({
