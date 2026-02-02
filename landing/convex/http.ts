@@ -557,6 +557,41 @@ registerVersionedRoute("/api/notifications/unread-count", "GET", httpAction(asyn
   return jsonResponse({ count });
 }));
 
+// ============ HUMAN NOTIFICATIONS (Admin) ============
+
+// GET /api/admin/human-notifications - Get human notifications for admin
+registerVersionedRoute("/api/admin/human-notifications", "GET", httpAction(async (ctx, request) => {
+  const url = new URL(request.url);
+  const unreadOnly = url.searchParams.get("unread") === "true";
+  const limitParam = url.searchParams.get("limit");
+  const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+
+  const result = await ctx.runQuery(api.humanNotifications.listHumanNotifications, {
+    unreadOnly,
+    limit,
+  });
+  return jsonResponse(result);
+}));
+
+// POST /api/admin/human-notifications/read - Mark human notification as read
+registerVersionedRoute("/api/admin/human-notifications/read", "POST", httpAction(async (ctx, request) => {
+  try {
+    const body = await request.json() as { notificationId: string };
+    const result = await ctx.runMutation(api.humanNotifications.markHumanNotificationRead, {
+      notificationId: body.notificationId as any,
+    });
+    return jsonResponse(result);
+  } catch (error) {
+    return jsonResponse({ success: false, error: String(error) }, 400);
+  }
+}));
+
+// GET /api/admin/human-notifications/unread-count - Get unread human notification count
+registerVersionedRoute("/api/admin/human-notifications/unread-count", "GET", httpAction(async (ctx, request) => {
+  const count = await ctx.runQuery(api.humanNotifications.getUnreadHumanNotificationCount, {});
+  return jsonResponse({ count });
+}));
+
 // ============ CORS PREFLIGHT ============
 
 // Handle OPTIONS for all routes (both legacy and v1 paths)
@@ -588,5 +623,8 @@ registerVersionedCors("/api/notifications");
 registerVersionedCors("/api/notifications/read");
 registerVersionedCors("/api/notifications/read-all");
 registerVersionedCors("/api/notifications/unread-count");
+registerVersionedCors("/api/admin/human-notifications");
+registerVersionedCors("/api/admin/human-notifications/read");
+registerVersionedCors("/api/admin/human-notifications/unread-count");
 
 export default http;
