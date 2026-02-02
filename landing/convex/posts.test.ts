@@ -3,6 +3,9 @@ import { expect, test, describe } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
 
+const TEST_ADMIN_SECRET = "test-admin-secret";
+process.env.ADMIN_SECRET = TEST_ADMIN_SECRET;
+
 const modules = import.meta.glob("./**/*.ts");
 
 // Test admin secret - should match ADMIN_SECRET env var in test environment
@@ -23,7 +26,6 @@ async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: str
     capabilities: ["development"],
     interests: ["ai"],
     autonomyLevel: "full_autonomy",
-    notificationMethod: "polling",
   });
 
   if (!result.success) throw new Error("Failed to create agent");
@@ -63,7 +65,7 @@ describe("posts", () => {
 
       // Create agent but don't verify
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 1,
       });
       const regResult = await t.mutation(api.agents.register, {
@@ -74,7 +76,6 @@ describe("posts", () => {
         capabilities: [],
         interests: [],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       if (!regResult.success) throw new Error("Failed to create agent");
@@ -117,12 +118,12 @@ describe("posts", () => {
       });
 
       // Check notifications for mentioned agent
-      const notifications = await t.query(api.notifications.list, {
+      const result = await t.query(api.notifications.list, {
         apiKey: mentionedKey,
         limit: 10,
       });
 
-      expect(notifications.some((n) => n.type === "mention")).toBe(true);
+      expect(result.notifications.some((n: { type: string }) => n.type === "mention")).toBe(true);
     });
   });
 

@@ -13,8 +13,15 @@ export const autonomyLevels = v.union(
 export const verificationType = v.union(
   v.literal("none"),
   v.literal("email"),
+  v.literal("email_domain"),  // Work email verified
   v.literal("twitter"),
   v.literal("domain")
+);
+
+// Email verification types (personal vs work domain)
+export const emailVerificationType = v.union(
+  v.literal("personal"),  // gmail, yahoo, hotmail, etc.
+  v.literal("work")       // custom company domain
 );
 
 // Verification tiers with different feature access
@@ -120,6 +127,11 @@ export default defineSchema({
     emailVerificationCode: v.optional(v.string()),
     emailVerificationExpiresAt: v.optional(v.number()),
 
+    // Email domain verification (new)
+    emailDomain: v.optional(v.string()),                    // Extracted domain: "stripe.com"
+    emailDomainVerified: v.optional(v.boolean()),           // true if work domain
+    emailVerificationType: v.optional(emailVerificationType), // "personal" or "work"
+
     // Capabilities and interests (tags)
     capabilities: v.array(v.string()),
     interests: v.array(v.string()),
@@ -139,13 +151,15 @@ export default defineSchema({
     inviteCodesRemaining: v.number(),
     canInvite: v.boolean(),
 
-    // Notification preferences
+    // Notification preferences (polling default, websocket coming soon)
     notificationMethod: v.union(
-      v.literal("webhook"),
       v.literal("websocket"),
-      v.literal("polling")
+      v.literal("polling"),
+      v.literal("webhook")
     ),
-    webhookUrl: v.optional(v.string()),
+
+    // Search optimization - denormalized searchable text
+    searchableText: v.optional(v.string()),
 
     // Privacy settings (privacy-by-default)
     privacySettings: v.optional(v.object({
@@ -171,8 +185,10 @@ export default defineSchema({
     .index("by_verified", ["verified"])
     .index("by_karma", ["karma"])
     .index("by_email", ["email"])
-    .index("by_lastActiveAt", ["lastActiveAt"])
-    .index("by_deletedAt", ["deletedAt"]),
+    .searchIndex("search_agents", {
+      searchField: "searchableText",
+      filterFields: ["verified", "verificationTier"],
+    }),
 
   // Posts - the main content
   posts: defineTable({
@@ -308,16 +324,12 @@ export default defineSchema({
     read: v.boolean(),
     readAt: v.optional(v.number()),
 
-    // Webhook delivery status
-    webhookDelivered: v.optional(v.boolean()),
-    webhookDeliveredAt: v.optional(v.number()),
-
     createdAt: v.number(),
   })
     .index("by_agentId", ["agentId"])
     .index("by_agentId_read", ["agentId", "read"])
     .index("by_agentId_createdAt", ["agentId", "createdAt"])
-    .index("by_createdAt", ["createdAt"]),
+    .index("by_agentId_read_createdAt", ["agentId", "read", "createdAt"]),
 
   // Activity log for human dashboard
   activityLog: defineTable({

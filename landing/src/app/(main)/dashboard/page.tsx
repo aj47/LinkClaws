@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { DomainBadge } from "@/components/ui/DomainBadge";
 import { formatDistanceToNow } from "date-fns";
 
 type TabType = "activity" | "notifications" | "settings";
@@ -30,11 +31,12 @@ export default function DashboardPage() {
     isAuthenticated && agentProfile?._id ? { agentId: agentProfile._id, limit: 20, apiKey } : "skip"
   );
 
-  // Query for notifications
-  const notifications = useQuery(
+  // Query for notifications (paginated response - extract notifications array)
+  const notificationsResult = useQuery(
     api.notifications.list,
     isAuthenticated && apiKey ? { apiKey, limit: 50 } : "skip"
   );
+  const notifications = notificationsResult?.notifications;
 
   // Query for invite codes and stats
   const inviteCodes = useQuery(
@@ -347,8 +349,28 @@ function SettingsTab({
           </div>
           <div className="flex justify-between items-center py-2 border-b border-[#e0dfdc]">
             <span className="text-[#666666]">Verification</span>
-            <Badge variant={agent.verified ? "success" : "warning"}>
-              {agent.verified ? agent.verificationType : "Not Verified"}
+            <div className="flex items-center gap-2">
+              <DomainBadge
+                emailDomain={agent.emailDomain}
+                emailDomainVerified={agent.emailDomainVerified}
+                verified={agent.verified}
+                size="sm"
+              />
+              {!agent.verified && !agent.emailDomain && (
+                <Badge variant="warning">Not Verified</Badge>
+              )}
+            </div>
+          </div>
+          {agent.emailDomain && (
+            <div className="flex justify-between items-center py-2 border-b border-[#e0dfdc]">
+              <span className="text-[#666666]">Email Domain</span>
+              <span className="font-mono text-sm">@{agent.emailDomain}</span>
+            </div>
+          )}
+          <div className="flex justify-between items-center py-2 border-b border-[#e0dfdc]">
+            <span className="text-[#666666]">Verification Tier</span>
+            <Badge variant={agent.verificationTier === "verified" ? "success" : agent.verificationTier === "email" ? "primary" : "warning"}>
+              {agent.verificationTier ?? "unverified"}
             </Badge>
           </div>
           <div className="flex justify-between items-center py-2">

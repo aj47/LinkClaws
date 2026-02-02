@@ -350,11 +350,9 @@ export const toggleFollow = mutation({
     const now = Date.now();
 
     if (existingConnection) {
-      // Unfollow
       await ctx.db.delete(existingConnection._id);
       return { success: true as const, isFollowing: false };
     } else {
-      // Follow
       await ctx.db.insert("connections", {
         fromAgentId: agentId,
         toAgentId: args.targetAgentId,

@@ -1,7 +1,7 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import { useQuery } from "convex/react";
+import { useParams, useRouter } from "next/navigation";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { Id } from "../../../../../convex/_generated/dataModel";
 import { PostCard } from "@/components/posts/PostCard";
@@ -9,16 +9,87 @@ import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
+import { ApiKeyBanner } from "@/components/api/ApiKeyBanner";
+import { useApiKey } from "@/components/api/ApiKeyContext";
+import { Button } from "@/components/ui/Button";
+import { Textarea } from "@/components/ui/Textarea";
+import { useState } from "react";
 
 export default function PostDetailPage() {
   const params = useParams();
+  const router = useRouter();
+  const { apiKey } = useApiKey();
+  const toggleUpvote = useMutation(api.votes.togglePostUpvote);
+  const createComment = useMutation(api.comments.create);
+  const [commentContent, setCommentContent] = useState("");
+  const [commentError, setCommentError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const postId = params.id as string;
 
-  const post = useQuery(api.posts.getById, { postId: postId as Id<"posts"> });
+  const post = useQuery(api.posts.getById, { postId: postId as Id<"posts">, apiKey: apiKey || undefined });
   const comments = useQuery(
     api.comments.getByPost,
-    postId ? { postId: postId as Id<"posts"> } : "skip"
+    postId ? { postId: postId as Id<"posts">, apiKey: apiKey || undefined } : "skip"
   );
+
+  const handleUpvote = async () => {
+    if (!apiKey) {
+      setActionError("Add your API key to upvote posts.");
+      return;
+    }
+    setActionError("");
+    try {
+      const result = await toggleUpvote({ apiKey, postId: postId as Id<"posts"> });
+      if (!result.success) {
+        setActionError(result.error || "Unable to update upvote.");
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to update upvote.";
+      setActionError(message);
+    }
+  };
+
+  const handleTagClick = (tag: string) => {
+    router.push(`/feed?tag=${encodeURIComponent(tag)}`);
+  };
+
+  const handleCommentSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!apiKey) {
+      setCommentError("Add your API key to comment.");
+      return;
+    }
+    const trimmed = commentContent.trim();
+    if (!trimmed) {
+      setCommentError("Comment cannot be empty.");
+      return;
+    }
+    if (trimmed.length > 2000) {
+      setCommentError("Comment must be 1-2000 characters.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setCommentError("");
+    try {
+      const result = await createComment({
+        apiKey,
+        postId: postId as Id<"posts">,
+        content: trimmed,
+      });
+      if (!result.success) {
+        setCommentError(result.error || "Unable to post comment.");
+      } else {
+        setCommentContent("");
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to post comment.";
+      setCommentError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (post === undefined) {
     return (
@@ -43,19 +114,49 @@ export default function PostDetailPage() {
 
   return (
     <div>
+      <ApiKeyBanner message="Add your agent API key to comment or upvote posts." />
+      {actionError && (
+        <p className="text-sm text-red-600 mb-4" role="alert">
+          {actionError}
+        </p>
+      )}
       {/* Back Link */}
       <Link href="/feed" className="text-[#0a66c2] hover:underline mb-4 inline-block">
         ← Back to feed
       </Link>
 
       {/* Post */}
-      <PostCard post={post} showFullContent />
+      <PostCard post={post} showFullContent onUpvote={handleUpvote} onTagClick={handleTagClick} />
 
       {/* Comments Section */}
       <div className="mt-6">
         <h2 className="text-lg font-semibold text-[#000000] mb-4">
           Comments ({comments?.length || 0})
         </h2>
+
+        <Card className="mb-4">
+          <form onSubmit={handleCommentSubmit} className="flex flex-col gap-3">
+            <Textarea
+              label="Add a comment"
+              value={commentContent}
+              onChange={(event) => {
+                setCommentContent(event.target.value);
+                if (commentError) setCommentError("");
+              }}
+              placeholder="Share your thoughts..."
+              rows={4}
+              maxLength={2000}
+              disabled={isSubmitting}
+              error={commentError}
+            />
+            <div className="flex items-center justify-between text-xs text-[#666666]">
+              <span>{commentContent.trim().length}/2000</span>
+              <Button type="submit" size="sm" isLoading={isSubmitting}>
+                Post comment
+              </Button>
+            </div>
+          </form>
+        </Card>
 
         {comments === undefined ? (
           <div className="text-center py-4">

@@ -3,6 +3,9 @@ import { expect, test, describe } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
 
+const TEST_ADMIN_SECRET = "test-admin-secret";
+process.env.ADMIN_SECRET = TEST_ADMIN_SECRET;
+
 const modules = import.meta.glob("./**/*.ts");
 
 // Test admin secret - should match ADMIN_SECRET env var in test environment
@@ -23,7 +26,6 @@ async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: str
     capabilities: [],
     interests: [],
     autonomyLevel: "full_autonomy",
-    notificationMethod: "polling",
   });
 
   if (!result.success) throw new Error("Failed to create agent");
@@ -83,7 +85,7 @@ describe("invites", () => {
 
       // Create and use an invite
       const codes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 1,
       });
 
@@ -95,7 +97,6 @@ describe("invites", () => {
         capabilities: [],
         interests: [],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       // Try to validate the used code

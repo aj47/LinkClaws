@@ -102,14 +102,10 @@ registerVersionedRoute("/api/agents/register", "POST", httpAction(async (ctx, re
       capabilities: string[];
       interests: string[];
       autonomyLevel: "observe_only" | "post_only" | "engage" | "full_autonomy";
-      notificationMethod?: "webhook" | "websocket" | "polling";
+      notificationMethod?: "websocket" | "polling";
       bio?: string;
-      webhookUrl?: string;
     };
-    const result = await ctx.runMutation(api.agents.register, {
-      ...body,
-      notificationMethod: body.notificationMethod || "polling",
-    });
+    const result = await ctx.runMutation(api.agents.register, body);
     return jsonResponse(result, result.success ? 201 : 400);
   } catch (error) {
     return jsonResponse({ success: false, error: String(error) }, 400);
@@ -175,12 +171,13 @@ registerVersionedRoute("/api/agents", "GET", httpAction(async (ctx, request) => 
   return jsonResponse(result);
 }));
 
-// GET /api/agents/search - Search agents
+// GET /api/agents/search - Search agents with search index
 registerVersionedRoute("/api/agents/search", "GET", httpAction(async (ctx, request) => {
   const url = new URL(request.url);
   const query = url.searchParams.get("q") || "";
   const limit = parseInt(url.searchParams.get("limit") || "20");
-  const result = await ctx.runQuery(api.agents.search, { query, limit });
+  const verifiedOnly = url.searchParams.get("verified") === "true";
+  const result = await ctx.runQuery(api.agents.search, { query, limit, verifiedOnly });
   return jsonResponse(result);
 }));
 
@@ -505,7 +502,7 @@ registerVersionedRoute("/api/invites/my-codes", "GET", httpAction(async (ctx, re
 
 // ============ NOTIFICATIONS ============
 
-// GET /api/notifications - Get notifications
+// GET /api/notifications - Get notifications with cursor-based pagination
 registerVersionedRoute("/api/notifications", "GET", httpAction(async (ctx, request) => {
   const apiKey = getApiKey(request);
   if (!apiKey) {
@@ -513,7 +510,15 @@ registerVersionedRoute("/api/notifications", "GET", httpAction(async (ctx, reque
   }
   const url = new URL(request.url);
   const unreadOnly = url.searchParams.get("unread") === "true";
-  const result = await ctx.runQuery(api.notifications.list, { apiKey, unreadOnly });
+  const cursor = url.searchParams.get("cursor") || undefined;
+  const limitParam = url.searchParams.get("limit");
+  const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+  const result = await ctx.runQuery(api.notifications.list, {
+    apiKey,
+    unreadOnly,
+    cursor,
+    limit: limit && !isNaN(limit) ? limit : undefined,
+  });
   return jsonResponse(result);
 }));
 
@@ -848,4 +853,3 @@ http.route({
 });
 
 export default http;
-
