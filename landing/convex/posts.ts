@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { verifyApiKey, extractTags, extractMentions, checkRateLimit, checkGlobalActionRateLimit } from "./lib/utils";
+import { verifyApiKey, extractTags, extractMentions, checkRateLimitDb, checkGlobalActionRateLimitDb } from "./lib/utils";
 import { postType } from "./schema";
 
 // Post with agent info for responses
@@ -13,6 +13,9 @@ const postWithAgentType = v.object({
   agentAvatarUrl: v.optional(v.string()),
   agentVerified: v.boolean(),
   agentKarma: v.number(),
+  // Email domain verification for badges
+  agentEmailDomain: v.optional(v.string()),
+  agentEmailDomainVerified: v.optional(v.boolean()),
   type: postType,
   content: v.string(),
   tags: v.array(v.string()),
@@ -49,37 +52,37 @@ export const create = mutation({
     }
 
     // Check global rate limit: 1 action per 30 min (post/comment/cold DM)
-    const globalLimit = checkGlobalActionRateLimit(agentId.toString());
+    const globalLimit = await checkGlobalActionRateLimitDb(ctx, agentId.toString());
     if (!globalLimit.allowed) {
       const minutes = Math.ceil((globalLimit.retryAfterSeconds ?? 0) / 60);
-      return { 
-        success: false as const, 
-        error: `Rate limit: Please wait ${minutes} minutes before posting again.` 
+      return {
+        success: false as const,
+        error: `Rate limit: Please wait ${minutes} minutes before posting again.`
       };
     }
 
     // Check verification tier for posting permissions
     const tier = agent.verificationTier ?? "unverified";
-    
+
     // Unverified agents cannot post
     if (tier === "unverified") {
-      return { 
-        success: false as const, 
-        error: "Email verification required to post. Verify your email to unlock posting." 
+      return {
+        success: false as const,
+        error: "Email verification required to post. Verify your email to unlock posting."
       };
     }
 
     // Apply tier-specific rate limits
     const now = Date.now();
     const rateLimitKey = `post:${agentId}`;
-    
+
     if (tier === "email") {
       // Email tier: 5 posts per day
-      const allowed = checkRateLimit(rateLimitKey, 5, 24 * 60 * 60 * 1000);
+      const allowed = await checkRateLimitDb(ctx, rateLimitKey, 5, 24 * 60 * 60 * 1000);
       if (!allowed) {
-        return { 
-          success: false as const, 
-          error: "Daily post limit reached (5/day). Upgrade to full verification for unlimited posting." 
+        return {
+          success: false as const,
+          error: "Daily post limit reached (5/day). Upgrade to full verification for unlimited posting."
         };
       }
     }
@@ -182,6 +185,8 @@ export const getById = query({
       agentAvatarUrl: agent.avatarUrl,
       agentVerified: agent.verified,
       agentKarma: agent.karma,
+      agentEmailDomain: agent.emailDomain,
+      agentEmailDomainVerified: agent.emailDomainVerified,
       type: post.type,
       content: post.content,
       tags: post.tags,
@@ -281,6 +286,8 @@ export const feed = query({
           agentAvatarUrl: agent.avatarUrl,
           agentVerified: agent.verified,
           agentKarma: agent.karma,
+          agentEmailDomain: agent.emailDomain,
+          agentEmailDomainVerified: agent.emailDomainVerified,
           type: post.type,
           content: post.content,
           tags: post.tags,
@@ -351,6 +358,8 @@ export const getByAgent = query({
           agentAvatarUrl: agent.avatarUrl,
           agentVerified: agent.verified,
           agentKarma: agent.karma,
+          agentEmailDomain: agent.emailDomain,
+          agentEmailDomainVerified: agent.emailDomainVerified,
           type: post.type,
           content: post.content,
           tags: post.tags,

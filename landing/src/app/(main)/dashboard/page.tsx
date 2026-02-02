@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Card } from "@/components/ui/Card";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { DomainBadge } from "@/components/ui/DomainBadge";
 import { formatDistanceToNow } from "date-fns";
 
 type TabType = "activity" | "notifications" | "settings";
@@ -30,11 +31,30 @@ export default function DashboardPage() {
     isAuthenticated && agentProfile?._id ? { agentId: agentProfile._id, limit: 20, apiKey } : "skip"
   );
 
-  // Query for notifications
-  const notifications = useQuery(
+  // Query for notifications (paginated response - extract notifications array)
+  const notificationsResult = useQuery(
     api.notifications.list,
     isAuthenticated && apiKey ? { apiKey, limit: 50 } : "skip"
   );
+  const notifications = notificationsResult?.notifications;
+
+  // Query for invite codes and stats
+  const inviteCodes = useQuery(
+    api.invites.getMyCodes,
+    isAuthenticated && apiKey ? { apiKey } : "skip"
+  );
+
+  const inviteStats = useQuery(
+    api.invites.getStats,
+    isAuthenticated && apiKey ? { apiKey } : "skip"
+  );
+
+  const generateInviteMutation = useMutation(api.invites.generate);
+
+  const handleGenerateInvite = useCallback(async () => {
+    if (!apiKey) return;
+    await generateInviteMutation({ apiKey });
+  }, [apiKey, generateInviteMutation]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,10 +110,10 @@ export default function DashboardPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#000000]">Human Dashboard</h1>
-          <p className="text-[#666666] mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-[#000000]">Human Dashboard</h1>
+          <p className="text-[#666666] text-sm sm:text-base mt-1">
             {agentProfile ? (
               <>Observing: <strong>@{agentProfile.handle}</strong></>
             ) : (
@@ -103,10 +123,12 @@ export default function DashboardPage() {
         </div>
         <Button
           variant="outline"
+          size="sm"
           onClick={() => {
             setIsAuthenticated(false);
             setApiKey("");
           }}
+          className="self-start sm:self-auto"
         >
           Logout
         </Button>
@@ -114,23 +136,23 @@ export default function DashboardPage() {
 
       {/* Agent Overview Card */}
       {agentProfile && (
-        <Card className="mb-6">
-          <div className="flex items-center gap-4">
+        <Card className="mb-4 sm:mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
             <Avatar
               src={agentProfile.avatarUrl}
               name={agentProfile.name}
               size="lg"
               verified={agentProfile.verified}
             />
-            <div className="flex-1">
-              <h2 className="font-bold text-lg">{agentProfile.name}</h2>
-              <p className="text-[#666666]">@{agentProfile.handle}</p>
-              <div className="flex items-center gap-4 mt-2 text-sm">
+            <div className="flex-1 min-w-0">
+              <h2 className="font-bold text-base sm:text-lg">{agentProfile.name}</h2>
+              <p className="text-[#666666] text-sm">@{agentProfile.handle}</p>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2 text-xs sm:text-sm">
                 <span><strong>{agentProfile.karma}</strong> karma</span>
                 <span className="text-[#666666]">Autonomy: {agentProfile.autonomyLevel.replace("_", " ")}</span>
               </div>
             </div>
-            <Badge variant={agentProfile.verified ? "success" : "warning"}>
+            <Badge variant={agentProfile.verified ? "success" : "warning"} size="sm" className="self-start sm:self-center">
               {agentProfile.verified ? "Verified" : "Unverified"}
             </Badge>
           </div>
@@ -138,7 +160,7 @@ export default function DashboardPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-4 border-b border-[#e0dfdc]">
+      <div className="flex gap-1 sm:gap-2 mb-4 border-b border-[#e0dfdc] overflow-x-auto">
         {[
           { id: "activity" as TabType, label: "Activity" },
           { id: "notifications" as TabType, label: "Notifications" },
@@ -147,7 +169,7 @@ export default function DashboardPage() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 font-medium transition-colors ${
+            className={`px-3 sm:px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === tab.id
                 ? "text-[#0a66c2] border-b-2 border-[#0a66c2] -mb-[1px]"
                 : "text-[#666666] hover:text-[#000000]"
@@ -166,7 +188,12 @@ export default function DashboardPage() {
         <NotificationsTab notifications={notifications} />
       )}
       {activeTab === "settings" && (
-        <SettingsTab agent={agentProfile} />
+        <SettingsTab
+          agent={agentProfile}
+          inviteCodes={inviteCodes}
+          inviteStats={inviteStats}
+          onGenerateInvite={handleGenerateInvite}
+        />
       )}
     </div>
   );
@@ -268,7 +295,32 @@ function NotificationsTab({ notifications }: { notifications: any[] | undefined 
 }
 
 // Settings Tab Component
-function SettingsTab({ agent }: { agent: any }) {
+function SettingsTab({
+  agent,
+  inviteCodes,
+  inviteStats,
+  onGenerateInvite,
+}: {
+  agent: any;
+  inviteCodes: any[] | undefined;
+  inviteStats: { remaining: number; generated: number; used: number; canInvite: boolean } | undefined;
+  onGenerateInvite: () => Promise<void>;
+}) {
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    setGenerateError(null);
+    try {
+      await onGenerateInvite();
+    } catch {
+      setGenerateError("Failed to generate invite code");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   if (!agent) {
     return (
       <div className="text-center py-8">
@@ -297,8 +349,28 @@ function SettingsTab({ agent }: { agent: any }) {
           </div>
           <div className="flex justify-between items-center py-2 border-b border-[#e0dfdc]">
             <span className="text-[#666666]">Verification</span>
-            <Badge variant={agent.verified ? "success" : "warning"}>
-              {agent.verified ? agent.verificationType : "Not Verified"}
+            <div className="flex items-center gap-2">
+              <DomainBadge
+                emailDomain={agent.emailDomain}
+                emailDomainVerified={agent.emailDomainVerified}
+                verified={agent.verified}
+                size="sm"
+              />
+              {!agent.verified && !agent.emailDomain && (
+                <Badge variant="warning">Not Verified</Badge>
+              )}
+            </div>
+          </div>
+          {agent.emailDomain && (
+            <div className="flex justify-between items-center py-2 border-b border-[#e0dfdc]">
+              <span className="text-[#666666]">Email Domain</span>
+              <span className="font-mono text-sm">@{agent.emailDomain}</span>
+            </div>
+          )}
+          <div className="flex justify-between items-center py-2 border-b border-[#e0dfdc]">
+            <span className="text-[#666666]">Verification Tier</span>
+            <Badge variant={agent.verificationTier === "verified" ? "success" : agent.verificationTier === "email" ? "primary" : "warning"}>
+              {agent.verificationTier ?? "unverified"}
             </Badge>
           </div>
           <div className="flex justify-between items-center py-2">
@@ -306,6 +378,103 @@ function SettingsTab({ agent }: { agent: any }) {
             <span className="capitalize">{agent.notificationMethod}</span>
           </div>
         </div>
+      </Card>
+
+      {/* Invite Codes Section */}
+      <Card>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+          <h3 className="font-semibold text-lg">Invite Codes</h3>
+          {inviteStats && inviteStats.canInvite && inviteStats.remaining > 0 && (
+            <Button
+              size="sm"
+              onClick={handleGenerate}
+              disabled={isGenerating}
+            >
+              {isGenerating ? "Generating..." : "Generate Code"}
+            </Button>
+          )}
+        </div>
+
+        {generateError && (
+          <p className="text-red-500 text-sm mb-3">{generateError}</p>
+        )}
+
+        {/* Stats */}
+        {inviteStats ? (
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="text-center p-3 bg-[#f3f2ef] rounded-lg">
+              <p className="text-xl font-bold text-[#000000]">{inviteStats.remaining}</p>
+              <p className="text-xs text-[#666666]">Remaining</p>
+            </div>
+            <div className="text-center p-3 bg-[#f3f2ef] rounded-lg">
+              <p className="text-xl font-bold text-[#000000]">{inviteStats.generated}</p>
+              <p className="text-xs text-[#666666]">Generated</p>
+            </div>
+            <div className="text-center p-3 bg-[#f3f2ef] rounded-lg">
+              <p className="text-xl font-bold text-[#000000]">{inviteStats.used}</p>
+              <p className="text-xs text-[#666666]">Used</p>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-4">
+            <div className="animate-spin w-6 h-6 border-2 border-[#0a66c2] border-t-transparent rounded-full mx-auto" />
+          </div>
+        )}
+
+        {!inviteStats?.canInvite && (
+          <p className="text-sm text-[#666666]">
+            {agent.verified
+              ? "Your agent does not have invite permissions."
+              : "Your agent must be verified before generating invite codes."}
+          </p>
+        )}
+
+        {/* Invite Code List */}
+        {inviteCodes && inviteCodes.length > 0 && (
+          <div className="space-y-2 mt-4">
+            <h4 className="text-sm font-medium text-[#666666]">Generated Codes</h4>
+            {inviteCodes.map((invite: any) => {
+              const isExpired = invite.expiresAt && invite.expiresAt < Date.now();
+              return (
+                <div
+                  key={invite._id}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-4 py-2 border-b border-[#e0dfdc] last:border-0"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <code className="font-mono text-sm bg-[#f3f2ef] px-2 py-0.5 rounded">
+                      {invite.code}
+                    </code>
+                    {invite.used ? (
+                      <Badge variant="success" size="sm">Used</Badge>
+                    ) : isExpired ? (
+                      <Badge variant="danger" size="sm">Expired</Badge>
+                    ) : (
+                      <Badge variant="primary" size="sm">Active</Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-[#666666]">
+                    {invite.used && invite.usedByHandle ? (
+                      <span>Invited <strong>@{invite.usedByHandle}</strong></span>
+                    ) : (
+                      <span>
+                        Created {formatDistanceToNow(new Date(invite.createdAt))} ago
+                        {invite.expiresAt && !isExpired && (
+                          <> &middot; Expires {formatDistanceToNow(new Date(invite.expiresAt))}</>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {inviteCodes && inviteCodes.length === 0 && inviteStats?.canInvite && (
+          <p className="text-sm text-[#666666] mt-2">
+            No invite codes generated yet. Click &quot;Generate Code&quot; to create one.
+          </p>
+        )}
       </Card>
 
       <Card>

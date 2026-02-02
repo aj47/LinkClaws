@@ -3,12 +3,18 @@ import { expect, test, describe } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
 
+const TEST_ADMIN_SECRET = "test-admin-secret";
+process.env.ADMIN_SECRET = TEST_ADMIN_SECRET;
+
 const modules = import.meta.glob("./**/*.ts");
+
+// Test admin secret - should match ADMIN_SECRET env var in test environment
+const TEST_ADMIN_SECRET = process.env.ADMIN_SECRET || "test-admin-secret";
 
 // Helper to create a verified agent
 async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: string) {
   const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-    adminSecret: "linkclaws-admin-2024",
+    adminSecret: TEST_ADMIN_SECRET,
     count: 1,
   });
 
@@ -20,15 +26,15 @@ async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: str
     capabilities: [],
     interests: [],
     autonomyLevel: "full_autonomy",
-    notificationMethod: "polling",
   });
 
   if (!result.success) throw new Error("Failed to create agent");
 
   await t.mutation(api.agents.verify, {
+    adminSecret: TEST_ADMIN_SECRET,
     agentId: result.agentId,
-    verificationType: "email",
-    verificationData: "test@example.com",
+    verificationType: "twitter",
+    verificationData: `@${handle}`,
   });
 
   return { agentId: result.agentId, apiKey: result.apiKey };
@@ -49,13 +55,13 @@ describe("notifications", () => {
       });
 
       // Get notifications
-      const notifications = await t.query(api.notifications.list, {
+      const result = await t.query(api.notifications.list, {
         apiKey: mentionedKey,
         limit: 10,
       });
 
-      expect(notifications.length).toBeGreaterThanOrEqual(1);
-      expect(notifications.some((n) => n.type === "mention")).toBe(true);
+      expect(result.notifications.length).toBeGreaterThanOrEqual(1);
+      expect(result.notifications.some((n: { type: string }) => n.type === "mention")).toBe(true);
     });
 
     test("should filter unread only", async () => {
@@ -71,12 +77,12 @@ describe("notifications", () => {
       });
 
       // Get unread only
-      const unreadNotifications = await t.query(api.notifications.list, {
+      const unreadResult = await t.query(api.notifications.list, {
         apiKey: mentionedKey,
         unreadOnly: true,
       });
 
-      expect(unreadNotifications.every((n) => !n.read)).toBe(true);
+      expect(unreadResult.notifications.every((n: { read: boolean }) => !n.read)).toBe(true);
     });
   });
 
@@ -94,26 +100,26 @@ describe("notifications", () => {
       });
 
       // Get notifications
-      const notifications = await t.query(api.notifications.list, {
+      const notifResult = await t.query(api.notifications.list, {
         apiKey: mentionedKey,
         limit: 10,
       });
-      const notifId = notifications[0]._id;
+      const notifId = notifResult.notifications[0]._id;
 
       // Mark as read
-      const result = await t.mutation(api.notifications.markAsRead, {
+      const markResult = await t.mutation(api.notifications.markAsRead, {
         apiKey: mentionedKey,
         notificationId: notifId,
       });
 
-      expect(result.success).toBe(true);
+      expect(markResult.success).toBe(true);
 
       // Verify it's marked as read
-      const updatedNotifications = await t.query(api.notifications.list, {
+      const updatedResult = await t.query(api.notifications.list, {
         apiKey: mentionedKey,
         limit: 10,
       });
-      const updatedNotif = updatedNotifications.find((n) => n._id === notifId);
+      const updatedNotif = updatedResult.notifications.find((n: { _id: string }) => n._id === notifId);
       expect(updatedNotif?.read).toBe(true);
     });
   });

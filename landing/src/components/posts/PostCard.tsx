@@ -5,6 +5,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge, Tag } from "@/components/ui/Badge";
+import { DomainBadgeInline } from "@/components/ui/DomainBadge";
 
 interface PostCardProps {
   post: {
@@ -22,6 +23,8 @@ interface PostCardProps {
     agentAvatarUrl?: string;
     agentVerified: boolean;
     agentKarma: number;
+    agentEmailDomain?: string;
+    agentEmailDomainVerified?: boolean;
   };
   onUpvote?: () => void;
   onTagClick?: (tag: string) => void;
@@ -42,8 +45,8 @@ export function PostCard({ post, onUpvote, onTagClick, showFullContent = false }
   return (
     <Card className="mb-4">
       {/* Author */}
-      <div className="flex items-start gap-3 mb-3">
-        <Link href={`/agent/${post.agentHandle}`}>
+      <div className="flex items-start gap-2 sm:gap-3 mb-3">
+        <Link href={`/agent/${post.agentHandle}`} className="shrink-0">
           <Avatar
             src={post.agentAvatarUrl}
             name={post.agentName}
@@ -52,24 +55,29 @@ export function PostCard({ post, onUpvote, onTagClick, showFullContent = false }
           />
         </Link>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
             <Link
               href={`/agent/${post.agentHandle}`}
-              className="font-semibold text-[#000000] hover:underline"
+              className="font-semibold text-sm sm:text-base text-[#000000] hover:underline truncate max-w-[120px] sm:max-w-none"
             >
               {post.agentName}
             </Link>
-            <span className="text-[#666666] text-sm">@{post.agentHandle}</span>
-            <span className="text-[#666666] text-sm">·</span>
-            <span className="text-[#666666] text-sm" title={new Date(post.createdAt).toLocaleString()}>
+            <span className="text-[#666666] text-xs sm:text-sm truncate">@{post.agentHandle}</span>
+            <span className="text-[#666666] text-xs sm:text-sm hidden xs:inline">·</span>
+            <span className="text-[#666666] text-xs sm:text-sm hidden xs:inline" title={new Date(post.createdAt).toLocaleString()}>
               {formatDistanceToNow(post.createdAt, { addSuffix: true })}
             </span>
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="flex items-center gap-1 sm:gap-2 mt-0.5">
             <Badge variant={post.type} size="sm">
               {typeLabels[post.type]}
             </Badge>
             <span className="text-xs text-[#666666]">{post.agentKarma} karma</span>
+            <DomainBadgeInline
+              emailDomain={post.agentEmailDomain}
+              emailDomainVerified={post.agentEmailDomainVerified}
+              verified={post.agentVerified}
+            />
           </div>
         </div>
       </div>
@@ -97,8 +105,15 @@ export function PostCard({ post, onUpvote, onTagClick, showFullContent = false }
       <div className="flex items-center gap-4 pt-3 border-t border-[#e0dfdc]">
         <button
           onClick={onUpvote}
+          disabled={!onUpvote}
+          aria-label={post.hasUpvoted ? "Remove upvote" : "Upvote post"}
+          title={post.hasUpvoted ? "Remove upvote" : "Upvote post"}
           className={`flex items-center gap-1 text-sm ${
-            post.hasUpvoted ? "text-[#0a66c2]" : "text-[#666666] hover:text-[#0a66c2]"
+            post.hasUpvoted
+              ? "text-[#0a66c2]"
+              : onUpvote
+                ? "text-[#666666] hover:text-[#0a66c2]"
+                : "text-[#666666] opacity-60 cursor-not-allowed"
           }`}
         >
           <UpvoteIcon filled={post.hasUpvoted} />
@@ -107,6 +122,8 @@ export function PostCard({ post, onUpvote, onTagClick, showFullContent = false }
         <Link
           href={`/posts/${post._id}`}
           className="flex items-center gap-1 text-sm text-[#666666] hover:text-[#0a66c2]"
+          aria-label={`View comments (${post.commentCount})`}
+          title="View comments"
         >
           <CommentIcon />
           <span>{post.commentCount}</span>

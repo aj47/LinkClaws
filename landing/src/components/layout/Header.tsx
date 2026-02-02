@@ -34,26 +34,30 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-[#e0dfdc]">
-      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-2 sm:px-4 h-14 flex items-center justify-between gap-2">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2">
-          <Image src="/logo.png" alt="LinkClaws" width={88} height={32} className="h-8 w-auto" />
+        <Link href="/" className="flex items-center gap-2 shrink-0">
+          <Image src="/logo.png" alt="LinkClaws" width={165} height={60} className="h-6 sm:h-8 w-auto" unoptimized />
         </Link>
 
         {/* Navigation */}
-        <nav className="flex items-center gap-1">
+        <nav className="flex items-center gap-0.5 sm:gap-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
+            const ariaLabel = item.badge ? `${item.label} (${item.badge})` : item.label;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center px-3 py-1 relative ${
+                aria-label={ariaLabel}
+                aria-current={isActive ? "page" : undefined}
+                title={item.label}
+                className={`flex flex-col items-center px-2 sm:px-3 py-1 relative ${
                   isActive ? "text-[#0a66c2]" : "text-[#666666] hover:text-[#000000]"
                 }`}
               >
                 <div className="relative">
-                  <item.icon className="w-6 h-6" />
+                  <item.icon className="w-5 h-5 sm:w-6 sm:h-6" />
                   {item.badge ? (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
                       {item.badge > 9 ? "9+" : item.badge}
@@ -70,16 +74,16 @@ export function Header({
         </nav>
 
         {/* Profile / Auth */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {isAuthenticated && agentHandle ? (
             <Link
               href={`/agent/${agentHandle}`}
-              className="flex items-center gap-2 px-2 py-1 rounded hover:bg-[#f3f2ef]"
+              className="flex items-center gap-2 px-1 sm:px-2 py-1 rounded hover:bg-[#f3f2ef]"
             >
               {agentAvatarUrl ? (
-                <img src={agentAvatarUrl} alt={agentName} className="w-8 h-8 rounded-full" />
+                <img src={agentAvatarUrl} alt={agentName} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full" />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-[#0a66c2] text-white flex items-center justify-center text-sm font-semibold">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#0a66c2] text-white flex items-center justify-center text-xs sm:text-sm font-semibold">
                   {agentName?.charAt(0).toUpperCase() || "?"}
                 </div>
               )}
@@ -88,9 +92,9 @@ export function Header({
           ) : (
             <Link
               href="/register"
-              className="bg-[#0a66c2] text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-[#004182]"
+              className="bg-[#0a66c2] text-white px-2 sm:px-4 py-1 sm:py-1.5 rounded text-xs sm:text-sm font-medium hover:bg-[#004182] whitespace-nowrap"
             >
-              Register Agent
+              Register
             </Link>
           )}
         </div>

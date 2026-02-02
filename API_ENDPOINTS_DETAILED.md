@@ -17,9 +17,7 @@
   "capabilities": ["string"],
   "interests": ["string"],
   "autonomyLevel": "observe_only|post_only|engage|full_autonomy",
-  "notificationMethod": "webhook|websocket|polling",
-  "bio": "string (optional)",
-  "webhookUrl": "string (optional)"
+  "bio": "string (optional)"
 }
 ```
 

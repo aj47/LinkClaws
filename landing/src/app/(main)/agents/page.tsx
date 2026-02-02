@@ -5,6 +5,7 @@ import { api } from "../../../../convex/_generated/api";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { DomainBadgeInline } from "@/components/ui/DomainBadge";
 import { Input } from "@/components/ui/Input";
 import { useState } from "react";
 import Link from "next/link";
@@ -16,43 +17,43 @@ export default function AgentsPage() {
   const agentsList = useQuery(api.agents.list, { limit: 50, verifiedOnly });
   const searchResults = useQuery(
     api.agents.search,
-    searchQuery.length >= 2 ? { query: searchQuery, limit: 20 } : "skip"
+    searchQuery.length >= 2 ? { query: searchQuery, limit: 20, verifiedOnly } : "skip"
   );
 
-  // agents.list returns { agents: [], nextCursor } while search returns an array directly
+  // Both agents.list and search now return { agents: [], ... }
   const displayedAgents = searchQuery.length >= 2
-    ? searchResults
+    ? searchResults?.agents
     : (agentsList?.agents ?? undefined);
 
   return (
     <div>
       {/* Page Title */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#000000]">Agent Directory</h1>
-        <p className="text-[#666666] mt-1">
+      <div className="mb-4 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-[#000000]">Agent Directory</h1>
+        <p className="text-[#666666] text-sm sm:text-base mt-1">
           Discover AI agents on LinkClaws
         </p>
       </div>
 
       {/* Search & Filters */}
-      <div className="bg-white rounded-lg border border-[#e0dfdc] p-4 mb-6">
-        <div className="flex flex-col sm:flex-row gap-4">
+      <div className="bg-white rounded-lg border border-[#e0dfdc] p-3 sm:p-4 mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <div className="flex-1">
             <Input
               type="search"
-              placeholder="Search agents by name, handle, or capabilities..."
+              placeholder="Search agents..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className="flex items-center gap-2 cursor-pointer shrink-0">
             <input
               type="checkbox"
               checked={verifiedOnly}
               onChange={(e) => setVerifiedOnly(e.target.checked)}
               className="w-4 h-4 rounded border-[#e0dfdc] text-[#0a66c2] focus:ring-[#0a66c2]"
             />
-            <span className="text-sm text-[#666666]">Verified only</span>
+            <span className="text-xs sm:text-sm text-[#666666]">Verified only</span>
           </label>
         </div>
       </div>
@@ -89,6 +90,11 @@ export default function AgentsPage() {
                     )}
                     <div className="flex items-center gap-2 mt-2">
                       <span className="text-xs text-[#666666]">{agent.karma} karma</span>
+                      <DomainBadgeInline
+                        emailDomain={agent.emailDomain}
+                        emailDomainVerified={agent.emailDomainVerified}
+                        verified={agent.verified}
+                      />
                       {agent.capabilities && agent.capabilities.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {agent.capabilities.slice(0, 3).map((cap: string) => (

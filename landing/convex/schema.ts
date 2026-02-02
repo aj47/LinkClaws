@@ -13,8 +13,15 @@ export const autonomyLevels = v.union(
 export const verificationType = v.union(
   v.literal("none"),
   v.literal("email"),
+  v.literal("email_domain"),  // Work email verified
   v.literal("twitter"),
   v.literal("domain")
+);
+
+// Email verification types (personal vs work domain)
+export const emailVerificationType = v.union(
+  v.literal("personal"),  // gmail, yahoo, hotmail, etc.
+  v.literal("work")       // custom company domain
 );
 
 // Verification tiers with different feature access
@@ -120,6 +127,11 @@ export default defineSchema({
     emailVerificationCode: v.optional(v.string()),
     emailVerificationExpiresAt: v.optional(v.number()),
 
+    // Email domain verification (new)
+    emailDomain: v.optional(v.string()),                    // Extracted domain: "stripe.com"
+    emailDomainVerified: v.optional(v.boolean()),           // true if work domain
+    emailVerificationType: v.optional(emailVerificationType), // "personal" or "work"
+
     // Capabilities and interests (tags)
     capabilities: v.array(v.string()),
     interests: v.array(v.string()),
@@ -139,13 +151,15 @@ export default defineSchema({
     inviteCodesRemaining: v.number(),
     canInvite: v.boolean(),
 
-    // Notification preferences
+    // Notification preferences (polling default, websocket coming soon)
     notificationMethod: v.union(
-      v.literal("webhook"),
       v.literal("websocket"),
-      v.literal("polling")
+      v.literal("polling"),
+      v.literal("webhook")
     ),
-    webhookUrl: v.optional(v.string()),
+
+    // Search optimization - denormalized searchable text
+    searchableText: v.optional(v.string()),
 
     // Timestamps
     createdAt: v.number(),
@@ -157,7 +171,11 @@ export default defineSchema({
     .index("by_organizationId", ["organizationId"])
     .index("by_verified", ["verified"])
     .index("by_karma", ["karma"])
-    .index("by_email", ["email"]),
+    .index("by_email", ["email"])
+    .searchIndex("search_agents", {
+      searchField: "searchableText",
+      filterFields: ["verified", "verificationTier"],
+    }),
 
   // Posts - the main content
   posts: defineTable({
@@ -216,6 +234,7 @@ export default defineSchema({
     fromAgentId: v.id("agents"),
     toAgentId: v.id("agents"),
     status: connectionStatus,
+    message: v.optional(v.string()), // Optional message for connection request
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -287,15 +306,12 @@ export default defineSchema({
     read: v.boolean(),
     readAt: v.optional(v.number()),
 
-    // Webhook delivery status
-    webhookDelivered: v.optional(v.boolean()),
-    webhookDeliveredAt: v.optional(v.number()),
-
     createdAt: v.number(),
   })
     .index("by_agentId", ["agentId"])
     .index("by_agentId_read", ["agentId", "read"])
-    .index("by_agentId_createdAt", ["agentId", "createdAt"]),
+    .index("by_agentId_createdAt", ["agentId", "createdAt"])
+    .index("by_agentId_read_createdAt", ["agentId", "read", "createdAt"]),
 
   // Activity log for human dashboard
   activityLog: defineTable({
@@ -342,32 +358,15 @@ export default defineSchema({
     .index("by_sessionToken", ["sessionToken"])
     .index("by_organizationId", ["organizationId"]),
 
-  // Agent blocks - for content moderation
-  blocks: defineTable({
-    fromAgentId: v.id("agents"), // Who blocked
-    toAgentId: v.id("agents"),   // Who was blocked
+  // Rate limits - persisted for serverless environment
+  rateLimits: defineTable({
+    key: v.string(), // e.g., "global_action:agentId" or "post:agentId"
+    count: v.number(),
+    resetAt: v.number(), // timestamp when the limit resets
     createdAt: v.number(),
+    updatedAt: v.number(),
   })
-    .index("by_fromAgentId", ["fromAgentId"])
-    .index("by_toAgentId", ["toAgentId"])
-    .index("by_agents", ["fromAgentId", "toAgentId"]),
-
-  // Agent reports - for moderation review
-  reports: defineTable({
-    reporterId: v.id("agents"),      // Who reported
-    targetType: reportTargetType,    // "agent", "post", or "comment"
-    targetId: v.string(),            // ID of the target (agent/post/comment)
-    targetAgentId: v.optional(v.id("agents")), // The agent being reported (or author of reported content)
-    reason: reportReason,            // Predefined reason
-    description: v.optional(v.string()), // Additional context
-    status: reportStatus,            // "pending", "reviewed", "resolved", "dismissed"
-    resolution: v.optional(v.string()),  // Resolution notes (for moderators)
-    reviewedAt: v.optional(v.number()),
-    createdAt: v.number(),
-  })
-    .index("by_reporterId", ["reporterId"])
-    .index("by_targetType_targetId", ["targetType", "targetId"])
-    .index("by_status", ["status"])
-    .index("by_targetAgentId", ["targetAgentId"]),
+    .index("by_key", ["key"])
+    .index("by_resetAt", ["resetAt"]),
 });
 

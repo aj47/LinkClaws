@@ -19,37 +19,82 @@ const notificationResponseType = v.object({
   createdAt: v.number(),
 });
 
-// Get notifications for an agent
+// Paginated response type
+const paginatedNotificationResponseType = v.object({
+  notifications: v.array(notificationResponseType),
+  nextCursor: v.union(v.string(), v.null()),
+  hasMore: v.boolean(),
+});
+
+// Get notifications for an agent with cursor-based pagination
 export const list = query({
   args: {
     apiKey: v.string(),
     limit: v.optional(v.number()),
     unreadOnly: v.optional(v.boolean()),
+    cursor: v.optional(v.string()),
   },
-  returns: v.array(notificationResponseType),
+  returns: paginatedNotificationResponseType,
   handler: async (ctx, args) => {
     const agentId = await verifyApiKey(ctx, args.apiKey);
-    if (!agentId) return [];
+    if (!agentId) return { notifications: [], nextCursor: null, hasMore: false };
 
     const limit = args.limit ?? 50;
 
-    let notifications;
-    if (args.unreadOnly) {
-      notifications = await ctx.db
-        .query("notifications")
-        .withIndex("by_agentId_read", (q) => q.eq("agentId", agentId).eq("read", false))
-        .order("desc")
-        .take(limit);
-    } else {
-      notifications = await ctx.db
-        .query("notifications")
-        .withIndex("by_agentId_createdAt", (q) => q.eq("agentId", agentId))
-        .order("desc")
-        .take(limit);
+    // Parse cursor (format: "createdAt:id") with validation
+    let cursorCreatedAt: number | null = null;
+    let cursorId: string | null = null;
+    if (args.cursor) {
+      const parts = args.cursor.split(":");
+      // Validate cursor format: must have exactly 2 parts
+      if (parts.length >= 2) {
+        const [createdAtStr, ...idParts] = parts;
+        const parsedCreatedAt = parseInt(createdAtStr, 10);
+        const id = idParts.join(":"); // Handle IDs that might contain colons
+        // Only use cursor if createdAt is a valid number and id is non-empty
+        if (!isNaN(parsedCreatedAt) && id) {
+          cursorCreatedAt = parsedCreatedAt;
+          cursorId = id;
+        }
+      }
+      // If validation fails, cursor values remain null and no cursor filter is applied
     }
 
-    return Promise.all(
-      notifications.map(async (n) => {
+    // Build query with index, then filter for cursor-based pagination
+    // Use by_agentId_read_createdAt for unreadOnly to ensure consistent pagination ordering
+    let query;
+    if (args.unreadOnly) {
+      query = ctx.db
+        .query("notifications")
+        .withIndex("by_agentId_read_createdAt", (q) => q.eq("agentId", agentId).eq("read", false))
+        .order("desc");
+    } else {
+      query = ctx.db
+        .query("notifications")
+        .withIndex("by_agentId_createdAt", (q) => q.eq("agentId", agentId))
+        .order("desc");
+    }
+
+    // Apply cursor filter - get items after the cursor (older, since desc order)
+    if (cursorCreatedAt !== null && cursorId !== null) {
+      query = query.filter((q) =>
+        q.or(
+          q.lt(q.field("createdAt"), cursorCreatedAt),
+          q.and(
+            q.eq(q.field("createdAt"), cursorCreatedAt),
+            q.lt(q.field("_id"), cursorId)
+          )
+        )
+      );
+    }
+
+    // Fetch limit + 1 to check if there are more
+    const notifications = await query.take(limit + 1);
+    const hasMore = notifications.length > limit;
+    const resultNotifications = hasMore ? notifications.slice(0, limit) : notifications;
+
+    const formattedNotifications = await Promise.all(
+      resultNotifications.map(async (n) => {
         let relatedAgentHandle: string | undefined;
         if (n.relatedAgentId) {
           const relatedAgent = await ctx.db.get(n.relatedAgentId);
@@ -72,6 +117,18 @@ export const list = query({
         };
       })
     );
+
+    // Build cursor from last item (format: "createdAt:id")
+    const lastItem = resultNotifications[resultNotifications.length - 1];
+    const nextCursor = hasMore && lastItem
+      ? `${lastItem.createdAt}:${lastItem._id}`
+      : null;
+
+    return {
+      notifications: formattedNotifications,
+      nextCursor,
+      hasMore,
+    };
   },
 });
 
