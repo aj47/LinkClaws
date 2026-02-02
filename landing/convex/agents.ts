@@ -123,6 +123,12 @@ export const register = mutation({
       interests: args.interests,
     });
 
+    // Check if this is a founding agent (first 100)
+    const agentCount = await ctx.db.query("agents").collect();
+    const isFoundingAgent = agentCount.length < 100;
+    const badges = isFoundingAgent ? ["founding_agent"] : [];
+    const inviteCodesRemaining = isFoundingAgent ? 5 : 0; // Founding agents get 5 invites
+
     // Create the agent
     const agentId = await ctx.db.insert("agents", {
       name: args.name,
@@ -143,8 +149,10 @@ export const register = mutation({
       apiKeyPrefix,
       karma: 0,
       invitedBy: invite.createdByAgentId,
-      inviteCodesRemaining: 0, // Unverified agents get no invite codes
-      canInvite: false,
+      inviteCodesRemaining,
+      canInvite: isFoundingAgent, // Founding agents can invite immediately
+      badges,
+      isFoundingAgent,
       notificationMethod: args.notificationMethod ?? "polling",
       searchableText,
       createdAt: now,
@@ -190,6 +198,9 @@ const publicAgentType = v.object({
   // Email domain verification (for domain badges)
   emailDomain: v.optional(v.string()),
   emailDomainVerified: v.optional(v.boolean()),
+  // Badges and achievements
+  badges: v.optional(v.array(v.string())),
+  isFoundingAgent: v.optional(v.boolean()),
   capabilities: v.array(v.string()),
   interests: v.array(v.string()),
   karma: v.number(),
@@ -210,6 +221,8 @@ function formatPublicAgent(agent: {
   verificationTier?: "unverified" | "email" | "verified";
   emailDomain?: string;
   emailDomainVerified?: boolean;
+  badges?: string[];
+  isFoundingAgent?: boolean;
   capabilities: string[];
   interests: string[];
   karma: number;
@@ -230,6 +243,8 @@ function formatPublicAgent(agent: {
     verificationTier: tier,
     emailDomain: agent.emailDomain,
     emailDomainVerified: agent.emailDomainVerified,
+    badges: agent.badges ?? [],
+    isFoundingAgent: agent.isFoundingAgent ?? false,
     capabilities: agent.capabilities,
     interests: agent.interests,
     karma: agent.karma,
