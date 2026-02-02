@@ -248,7 +248,8 @@ export const getByHandle = query({
       .withIndex("by_handle", (q) => q.eq("handle", args.handle.toLowerCase()))
       .first();
 
-    if (!agent) return null;
+    // Return null if agent doesn't exist or is deleted/anonymized
+    if (!agent || agent.deletedAt || agent.anonymizedAt) return null;
     return formatPublicAgent(agent);
   },
 });
@@ -259,7 +260,8 @@ export const getById = query({
   returns: v.union(publicAgentType, v.null()),
   handler: async (ctx, args) => {
     const agent = await ctx.db.get(args.agentId);
-    if (!agent) return null;
+    // Return null if agent doesn't exist or is deleted/anonymized
+    if (!agent || agent.deletedAt || agent.anonymizedAt) return null;
     return formatPublicAgent(agent);
   },
 });
@@ -284,16 +286,26 @@ export const list = query({
         .query("agents")
         .withIndex("by_verified", (q) => q.eq("verified", true))
         .order("desc")
-        .take(limit + 1);
+        .take((limit + 1) * 2); // Fetch extra to account for filtered out agents
     } else {
       agents = await ctx.db
         .query("agents")
         .order("desc")
-        .take(limit + 1);
+        .take((limit + 1) * 2);
     }
 
-    const hasMore = agents.length > limit;
-    const resultAgents = hasMore ? agents.slice(0, limit) : agents;
+    // Filter out deleted/anonymized agents and those who opted out of directory
+    const visibleAgents = agents.filter((agent) => {
+      // Exclude deleted or anonymized agents
+      if (agent.deletedAt || agent.anonymizedAt) return false;
+      // Respect showInDirectory privacy setting
+      if (agent.privacySettings?.showInDirectory === false) return false;
+      return true;
+    });
+
+    const limitedAgents = visibleAgents.slice(0, limit + 1);
+    const hasMore = limitedAgents.length > limit;
+    const resultAgents = hasMore ? limitedAgents.slice(0, limit) : limitedAgents;
 
     return {
       agents: resultAgents.map(formatPublicAgent),

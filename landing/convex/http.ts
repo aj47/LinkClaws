@@ -557,6 +557,220 @@ registerVersionedRoute("/api/notifications/unread-count", "GET", httpAction(asyn
   return jsonResponse({ count });
 }));
 
+// ============ COMPLIANCE / PRIVACY ============
+
+// POST /api/privacy/delete-account - Request account deletion
+http.route({
+  path: "/api/privacy/delete-account",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const body = await request.json() as { reason?: string };
+      const result = await ctx.runMutation(api.compliance.requestAccountDeletion, {
+        apiKey,
+        reason: body.reason,
+      });
+      return jsonResponse(result, 200);
+    } catch (error) {
+      return jsonResponse({ error: String(error) }, 400);
+    }
+  }),
+});
+
+// POST /api/privacy/cancel-deletion - Cancel account deletion request
+http.route({
+  path: "/api/privacy/cancel-deletion",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const body = await request.json() as { cancellationReason?: string };
+      const result = await ctx.runMutation(api.compliance.cancelAccountDeletion, {
+        apiKey,
+        cancellationReason: body.cancellationReason,
+      });
+      return jsonResponse(result, 200);
+    } catch (error) {
+      return jsonResponse({ error: String(error) }, 400);
+    }
+  }),
+});
+
+// GET /api/privacy/deletion-status - Get account deletion status
+http.route({
+  path: "/api/privacy/deletion-status",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const result = await ctx.runQuery(api.compliance.getAccountDeletionStatus, { apiKey });
+      return jsonResponse(result, 200);
+    } catch (error) {
+      return jsonResponse({ error: String(error) }, 400);
+    }
+  }),
+});
+
+// POST /api/privacy/export-data - Request data export
+http.route({
+  path: "/api/privacy/export-data",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const result = await ctx.runMutation(api.compliance.requestDataExport, { apiKey });
+      return jsonResponse(result, 200);
+    } catch (error) {
+      return jsonResponse({ error: String(error) }, 400);
+    }
+  }),
+});
+
+// GET /api/privacy/export-download - Download data export
+http.route({
+  path: "/api/privacy/export-download",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    const url = new URL(request.url);
+    const requestId = url.searchParams.get("requestId");
+    try {
+      const result = await ctx.runQuery(api.compliance.downloadDataExport, {
+        apiKey,
+        requestId: requestId as any || undefined,
+      });
+      return jsonResponse(result, 200);
+    } catch (error) {
+      return jsonResponse({ error: String(error) }, 400);
+    }
+  }),
+});
+
+// GET /api/privacy/export-status - Get data export status
+http.route({
+  path: "/api/privacy/export-status",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const result = await ctx.runQuery(api.compliance.getDataExportStatus, { apiKey });
+      return jsonResponse(result, 200);
+    } catch (error) {
+      return jsonResponse({ error: String(error) }, 400);
+    }
+  }),
+});
+
+// GET /api/privacy/settings - Get privacy settings
+http.route({
+  path: "/api/privacy/settings",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const result = await ctx.runQuery(api.compliance.getPrivacySettings, { apiKey });
+      return jsonResponse(result, 200);
+    } catch (error) {
+      return jsonResponse({ error: String(error) }, 400);
+    }
+  }),
+});
+
+// PATCH /api/privacy/settings - Update privacy settings
+http.route({
+  path: "/api/privacy/settings",
+  method: "PATCH",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    if (!apiKey) {
+      return jsonResponse({ error: "API key required" }, 401);
+    }
+    try {
+      const body = await request.json() as {
+        defaultPostVisibility?: "public" | "private";
+        showInDirectory?: boolean;
+        allowDirectMessages?: boolean;
+        showActivityStatus?: boolean;
+        shareAnalytics?: boolean;
+      };
+      const result = await ctx.runMutation(api.compliance.updatePrivacySettings, {
+        apiKey,
+        settings: body,
+      });
+      return jsonResponse(result, 200);
+    } catch (error) {
+      return jsonResponse({ error: String(error) }, 400);
+    }
+  }),
+});
+
+// POST /api/privacy/cookie-consent - Record cookie consent
+http.route({
+  path: "/api/privacy/cookie-consent",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    try {
+      const body = await request.json() as {
+        sessionId?: string;
+        analytics: boolean;
+        marketing: boolean;
+      };
+      const result = await ctx.runMutation(api.compliance.recordCookieConsent, {
+        apiKey: apiKey || undefined,
+        sessionId: body.sessionId,
+        analytics: body.analytics,
+        marketing: body.marketing,
+      });
+      return jsonResponse(result, 200);
+    } catch (error) {
+      return jsonResponse({ error: String(error) }, 400);
+    }
+  }),
+});
+
+// GET /api/privacy/cookie-consent - Get cookie consent status
+http.route({
+  path: "/api/privacy/cookie-consent",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const apiKey = getApiKey(request);
+    const url = new URL(request.url);
+    const sessionId = url.searchParams.get("sessionId");
+    try {
+      const result = await ctx.runQuery(api.compliance.getCookieConsent, {
+        apiKey: apiKey || undefined,
+        sessionId: sessionId || undefined,
+      });
+      return jsonResponse(result, 200);
+    } catch (error) {
+      return jsonResponse({ error: String(error) }, 400);
+    }
+  }),
+});
+
 // ============ CORS PREFLIGHT ============
 
 // Handle OPTIONS for all routes (both legacy and v1 paths)
@@ -588,5 +802,54 @@ registerVersionedCors("/api/notifications");
 registerVersionedCors("/api/notifications/read");
 registerVersionedCors("/api/notifications/read-all");
 registerVersionedCors("/api/notifications/unread-count");
+
+// Privacy/Compliance endpoints CORS
+http.route({
+  path: "/api/privacy/delete-account",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/privacy/cancel-deletion",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/privacy/deletion-status",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/privacy/export-data",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/privacy/export-download",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/privacy/export-status",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/privacy/settings",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
+
+http.route({
+  path: "/api/privacy/cookie-consent",
+  method: "OPTIONS",
+  handler: httpAction(async () => corsResponse()),
+});
 
 export default http;

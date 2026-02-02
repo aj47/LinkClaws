@@ -57,6 +57,33 @@ export const notificationType = v.union(
   v.literal("mention")
 );
 
+// Data export request status
+export const exportRequestStatus = v.union(
+  v.literal("pending"),
+  v.literal("processing"),
+  v.literal("completed"),
+  v.literal("failed"),
+  v.literal("expired")
+);
+
+// Account deletion request status
+export const deletionRequestStatus = v.union(
+  v.literal("pending"),
+  v.literal("processing"),
+  v.literal("completed"),
+  v.literal("cancelled")
+);
+
+// Deletion action types for audit log
+export const deletionActionType = v.union(
+  v.literal("account_deletion"),
+  v.literal("post_deletion"),
+  v.literal("message_cleanup"),
+  v.literal("notification_cleanup"),
+  v.literal("activity_log_cleanup"),
+  v.literal("data_anonymization")
+);
+
 export default defineSchema({
   // Waitlist (existing)
   waitlist: defineTable({
@@ -134,10 +161,23 @@ export default defineSchema({
     // Search optimization - denormalized searchable text
     searchableText: v.optional(v.string()),
 
+    // Privacy settings (privacy-by-default)
+    privacySettings: v.optional(v.object({
+      defaultPostVisibility: v.union(v.literal("public"), v.literal("private")),
+      showInDirectory: v.boolean(),
+      allowDirectMessages: v.boolean(),
+      showActivityStatus: v.boolean(),
+      shareAnalytics: v.boolean(),
+    })),
+
     // Timestamps
     createdAt: v.number(),
     updatedAt: v.number(),
     lastActiveAt: v.number(),
+
+    // Soft delete support
+    deletedAt: v.optional(v.number()),
+    anonymizedAt: v.optional(v.number()),
   })
     .index("by_handle", ["handle"])
     .index("by_apiKeyPrefix", ["apiKeyPrefix"])
@@ -167,11 +207,15 @@ export default defineSchema({
     // Timestamps
     createdAt: v.number(),
     updatedAt: v.number(),
+
+    // Soft delete support (30-day retention before permanent deletion)
+    deletedAt: v.optional(v.number()),
   })
     .index("by_agentId", ["agentId"])
     .index("by_type", ["type"])
     .index("by_createdAt", ["createdAt"])
-    .index("by_upvoteCount", ["upvoteCount"]),
+    .index("by_upvoteCount", ["upvoteCount"])
+    .index("by_deletedAt", ["deletedAt"]),
 
   // Comments on posts
   comments: defineTable({
@@ -236,7 +280,8 @@ export default defineSchema({
   })
     .index("by_threadId", ["threadId"])
     .index("by_threadId_createdAt", ["threadId", "createdAt"])
-    .index("by_fromAgentId", ["fromAgentId"]),
+    .index("by_fromAgentId", ["fromAgentId"])
+    .index("by_createdAt", ["createdAt"]),
 
   // Endorsements
   endorsements: defineTable({
@@ -310,7 +355,8 @@ export default defineSchema({
     .index("by_agentId", ["agentId"])
     .index("by_organizationId", ["organizationId"])
     .index("by_agentId_createdAt", ["agentId", "createdAt"])
-    .index("by_requiresApproval", ["requiresApproval", "approved"]),
+    .index("by_requiresApproval", ["requiresApproval", "approved"])
+    .index("by_createdAt", ["createdAt"]),
 
   // Human users (for dashboard access)
   humanUsers: defineTable({
