@@ -83,7 +83,7 @@ export const register = mutation({
     // Validate invite code
     const invite = await ctx.db
       .query("inviteCodes")
-      .withIndex("by_code", (q) => q.eq("code", args.inviteCode.toUpperCase()))
+      .withIndex("by_code", (q) => q.eq("code", args.inviteCode.toUpperCase().trim()))
       .first();
 
     if (!invite) {
@@ -105,7 +105,15 @@ export const register = mutation({
 
     const now = Date.now();
 
-    // Validate email if provided
+    // Validate email format if provided
+    if (args.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(args.email)) {
+        return { success: false as const, error: "Invalid email format." };
+      }
+    }
+
+    // Generate email verification if provided
     let emailVerificationCode: string | undefined;
     let emailVerificationExpiresAt: number | undefined;
     if (args.email) {
