@@ -7,23 +7,62 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { DomainBadgeInline } from "@/components/ui/DomainBadge";
 import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 import { useState } from "react";
 import Link from "next/link";
+import { Id } from "../../../../convex/_generated/dataModel";
 
 export default function AgentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [allAgents, setAllAgents] = useState<any[]>([]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const agentsList = useQuery(api.agents.list, { limit: 50, verifiedOnly });
+  const agentsList = useQuery(api.agents.list, { 
+    limit: 20, 
+    cursor: cursor ? (cursor as Id<"agents">) : undefined,
+    verifiedOnly 
+  });
   const searchResults = useQuery(
     api.agents.search,
     searchQuery.length >= 2 ? { query: searchQuery, limit: 20, verifiedOnly } : "skip"
   );
 
-  // Both agents.list and search now return { agents: [], ... }
-  const displayedAgents = searchQuery.length >= 2
+  // Reset pagination when search or filters change
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setCursor(undefined);
+    setAllAgents([]);
+  };
+
+  const handleVerifiedChange = (checked: boolean) => {
+    setVerifiedOnly(checked);
+    setCursor(undefined);
+    setAllAgents([]);
+  };
+
+  const handleLoadMore = () => {
+    const nextCursor = agentsList?.nextCursor;
+    if (nextCursor && !isLoadingMore && searchQuery.length < 2) {
+      setIsLoadingMore(true);
+      setCursor(nextCursor);
+      if (agentsList?.agents) {
+        setAllAgents((prev) => [...prev, ...agentsList.agents]);
+      }
+    }
+  };
+
+  // Both agents.list and search now return { agents: [], nextCursor }
+  const currentAgents = searchQuery.length >= 2
     ? searchResults?.agents
     : (agentsList?.agents ?? undefined);
+  
+  const displayedAgents = cursor && searchQuery.length < 2
+    ? [...allAgents, ...(currentAgents || [])]
+    : currentAgents;
+  
+  const hasMore = searchQuery.length < 2 && agentsList?.nextCursor;
 
   return (
     <div>
@@ -43,14 +82,14 @@ export default function AgentsPage() {
               type="search"
               placeholder="Search agents..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
             />
           </div>
           <label className="flex items-center gap-2 cursor-pointer shrink-0">
             <input
               type="checkbox"
               checked={verifiedOnly}
-              onChange={(e) => setVerifiedOnly(e.target.checked)}
+              onChange={(e) => handleVerifiedChange(e.target.checked)}
               className="w-4 h-4 rounded border-[#e0dfdc] text-[#0a66c2] focus:ring-[#0a66c2]"
             />
             <span className="text-xs sm:text-sm text-[#666666]">Verified only</span>
@@ -115,6 +154,27 @@ export default function AgentsPage() {
               </Card>
             </Link>
           ))}
+          
+          {/* Load More Button */}
+          {hasMore && (
+            <div className="col-span-full text-center py-6">
+              <Button
+                onClick={handleLoadMore}
+                disabled={isLoadingMore}
+                variant="outline"
+                className="min-w-[200px]"
+              >
+                {isLoadingMore ? (
+                  <>
+                    <div className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full mr-2" />
+                    Loading...
+                  </>
+                ) : (
+                  `Load More (${displayedAgents?.length || 0} loaded)`
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

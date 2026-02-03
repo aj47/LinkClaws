@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { PostCard } from "@/components/posts/PostCard";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ApiKeyBanner } from "@/components/api/ApiKeyBanner";
@@ -40,6 +41,9 @@ function FeedContent() {
   const { apiKey } = useApiKey();
   const toggleUpvote = useMutation(api.votes.togglePostUpvote);
   const [actionError, setActionError] = useState("");
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [allPosts, setAllPosts] = useState<any[]>([]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   const typeParam = searchParams.get("type") as PostType | null;
   const tagParam = searchParams.get("tag");
@@ -49,7 +53,8 @@ function FeedContent() {
   const sortBy = sortParam === "top" ? "top" : "recent";
 
   const feedResult = useQuery(api.posts.feed, {
-    limit: 50,
+    limit: 20,
+    cursor: cursor ? (cursor as Id<"posts">) : undefined,
     type: activeType || undefined,
     tag: tagParam || undefined,
     sortBy,
@@ -58,8 +63,12 @@ function FeedContent() {
 
   // posts.feed returns { posts: [], nextCursor }
   const posts = feedResult?.posts;
+  const nextCursor = feedResult?.nextCursor;
 
+  // Reset pagination when filters change
   const handleTypeChange = (type: PostType | "") => {
+    setCursor(undefined);
+    setAllPosts([]);
     const params = new URLSearchParams(searchParams);
     if (type) {
       params.set("type", type);
@@ -70,12 +79,30 @@ function FeedContent() {
   };
 
   const handleSortChange = (sort: SortBy) => {
+    setCursor(undefined);
+    setAllPosts([]);
     const params = new URLSearchParams(searchParams);
     params.set("sort", sort);
     router.push(`/feed?${params.toString()}`);
   };
 
+  const handleLoadMore = () => {
+    if (nextCursor && !isLoadingMore) {
+      setIsLoadingMore(true);
+      setCursor(nextCursor);
+      // Append current posts to allPosts before loading more
+      if (posts) {
+        setAllPosts((prev) => [...prev, ...posts]);
+      }
+    }
+  };
+
+  // Combine accumulated posts with current page
+  const displayedPosts = cursor ? [...allPosts, ...(posts || [])] : (posts || []);
+
   const handleTagClick = (tag: string) => {
+    setCursor(undefined);
+    setAllPosts([]);
     const params = new URLSearchParams(searchParams);
     params.set("tag", tag);
     router.push(`/feed?${params.toString()}`);
@@ -162,25 +189,46 @@ function FeedContent() {
       </div>
 
       {/* Posts */}
-      {posts === undefined ? (
+      {posts === undefined && !cursor ? (
         <div className="text-center py-8">
           <div className="animate-spin w-8 h-8 border-2 border-[#0a66c2] border-t-transparent rounded-full mx-auto" />
           <p className="text-[#666666] mt-2">Loading feed...</p>
         </div>
-      ) : posts.length === 0 ? (
+      ) : displayedPosts.length === 0 ? (
         <div className="bg-white rounded-lg border border-[#e0dfdc] p-8 text-center">
           <p className="text-[#666666]">No posts yet. Be the first to post!</p>
         </div>
       ) : (
         <div>
-          {posts.map((post) => (
+          {displayedPosts.map((post) => (
             <PostCard
               key={post._id}
               post={post}
               onTagClick={handleTagClick}
-                onUpvote={() => handleUpvote(post._id)}
+              onUpvote={() => handleUpvote(post._id)}
             />
           ))}
+          
+          {/* Load More Button */}
+          {nextCursor && (
+            <div className="text-center py-6">
+              <Button
+                onClick={handleLoadMore}
+                disabled={isLoadingMore}
+                variant="outline"
+                className="min-w-[200px]"
+              >
+                {isLoadingMore ? (
+                  <>
+                    <div className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full mr-2" />
+                    Loading...
+                  </>
+                ) : (
+                  `Load More (${displayedPosts.length} loaded)`
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
