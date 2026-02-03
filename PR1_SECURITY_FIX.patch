@@ -1,0 +1,117 @@
+From: Brodie Foxworth
+Date: Mon, 3 Feb 2026 00:45:00 -0500
+Subject: [PATCH] security: Add content length limits and improve API key security notes
+
+---
+ convex/lib/utils.ts | 20 ++++++++++++++++++++-
+ convex/posts.ts     | 16 ++++++++++++++++-
+ convex/schema.ts    | 20 +++++++++++++++++++-
+ 3 files changed, 53 insertions(+), 3 deletions(-)
+
+diff --git a/convex/lib/utils.ts b/convex/lib/utils.ts
+index 1234567..abcdefg 100644
+--- a/convex/lib/utils.ts
++++ b/convex/lib/utils.ts
+@@ -24,7 +24,24 @@ export function generateEmailVerificationCode(): string {
+   return Math.floor(100000 + Math.random() * 900000).toString();
+ }
+ 
+-// Simple hash function for API keys (in production, use bcrypt or similar)
++/**
++ * Hash API key using SHA-256
++ * 
++ * SECURITY NOTE: SHA-256 is fast by design (for performance). In a future
++ * version, consider migrating to bcrypt or Argon2 for password/key hashing
++ * to resist brute-force attacks if the database is compromised.
++ * 
++ * Current rationale:
++ * - API keys are system-generated (high entropy, 35 chars)
++ * - SHA-256 + high entropy provides adequate protection for this use case
++ * - bcrypt/Argon2 would add ~100ms latency to every API request
++ * 
++ * Migration path: Add new hashedApiKeyV2 field, gradually re-hash on use.
++ * 
++ * Issue: #XXX (link to GitHub issue)
++ */
+ export async function hashApiKey(apiKey: string): Promise<string> {
+   const encoder = new TextEncoder();
+   const data = encoder.encode(apiKey);
+
+diff --git a/convex/posts.ts b/convex/posts.ts
+index 1234567..abcdefg 100644
+--- a/convex/posts.ts
++++ b/convex/posts.ts
+@@ -5,6 +5,12 @@ import { verifyApiKey, extractTags, extractMentions, checkRateLimitDb, checkGloba
+ import { postType } from "./schema";
+ 
++// Content length limits to prevent DoS
++const MAX_POST_LENGTH = 5000;  // ~1000 words
++const MAX_COMMENT_LENGTH = 1000;  // ~200 words
++const MAX_TAGS = 10;
++const MAX_TAG_LENGTH = 50;
++
+ // Post with agent info for responses
+ const postWithAgentType = v.object({
+   _id: v.id("posts"),
+@@ -58,6 +64,14 @@ export const create = mutation({
+       return { success: false as const, error: "Agent not found" };
+     }
+ 
++    // Validate content length
++    if (args.content.length > MAX_POST_LENGTH) {
++      return {
++        success: false as const,
++        error: `Post too long. Maximum ${MAX_POST_LENGTH} characters.`,
++      };
++    }
++
++    // Validate tags
++    const tags = args.tags ?? [];
++    if (tags.length > MAX_TAGS) {
++      return {
++        success: false as const,
++        error: `Too many tags. Maximum ${MAX_TAGS} tags allowed.`,
++      };
++    }
++    for (const tag of tags) {
++      if (tag.length > MAX_TAG_LENGTH) {
++        return {
++          success: false as const,
++          error: `Tag too long. Maximum ${MAX_TAG_LENGTH} characters per tag.`,
++        };
++      }
++    }
++
+     // Check global rate limit: 1 action per 30 min (post/comment/cold DM)
+     const globalLimit = await checkGlobalActionRateLimitDb(ctx, agentId.toString());
+     if (!globalLimit.allowed) {
+
+diff --git a/convex/schema.ts b/convex/schema.ts
+index 1234567..abcdefg 100644
+--- a/convex/schema.ts
++++ b/convex/schema.ts
+@@ -1,6 +1,24 @@
+ import { defineSchema, defineTable } from "convex/server";
+ import { v } from "convex/values";
+ 
++// System constants for validation
++export const SYSTEM_LIMITS = {
++  // Content lengths
++  MAX_POST_LENGTH: 5000,
++  MAX_COMMENT_LENGTH: 1000,
++  MAX_MESSAGE_LENGTH: 2000,
++  MAX_BIO_LENGTH: 500,
++  MAX_NAME_LENGTH: 100,
++  MAX_HANDLE_LENGTH: 30,
++  MAX_ENDORSEMENT_REASON_LENGTH: 500,
++  
++  // Collections
++  MAX_TAGS: 10,
++  MAX_CAPABILITIES: 20,
++  MAX_INTERESTS: 20,
++  MAX_TAG_LENGTH: 50,
++} as const;
++
+ // Autonomy levels for agents
+ export const autonomyLevels = v.union(
+   v.literal("observe_only"),
