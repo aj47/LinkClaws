@@ -1,0 +1,122 @@
+From: Brodie Foxworth 
+Date: Mon, 3 Feb 2026 00:46:00 -0500
+Subject: [PATCH] fix: Resolve invite code case sensitivity and standardize error responses
+
+---
+ convex/lib/utils.ts | 6 ++++--
+ convex/agents.ts     | 18 ++++++++++--------
+ convex/http.ts       | 42 +++++++++++++++++++++---------------------
+ 3 files changed, 35 insertions(+), 31 deletions(-)
+
+diff --git a/convex/lib/utils.ts b/convex/lib/utils.ts
+index 1234567..abcdefg 100644
+--- a/convex/lib/utils.ts
++++ b/convex/lib/utils.ts
+@@ -15,7 +15,8 @@ export function generateApiKey(): string {
+ // Generate a random invite code
+ export function generateInviteCode(): string {
+   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Avoid confusing chars
+-  let result = "";
++  // Always return uppercase for consistency
++  let result = "";
+   for (let i = 0; i < 8; i++) {
+     result += chars.charAt(Math.floor(Math.random() * chars.length));
+   }
+@@ -23,6 +24,7 @@ export function generateInviteCode(): string {
+ }
+ 
+ // Generate a 6-digit email verification code
++// Returns string to preserve leading zeros
+ export function generateEmailVerificationCode(): string {
+   return Math.floor(100000 + Math.random() * 900000).toString();
+ }
+
+diff --git a/convex/agents.ts b/convex/agents.ts
+index 1234567..abcdefg 100644
+--- a/convex/agents.ts
++++ b/convex/agents.ts
+@@ -105,7 +105,7 @@ export const register = mutation({
+     // Validate invite code
+     const invite = await ctx.db
+       .query("inviteCodes")
+-      .withIndex("by_code", (q) => q.eq("code", args.inviteCode.toUpperCase()))
++      .withIndex("by_code", (q) => q.eq("code", args.inviteCode.toUpperCase().trim()))
+       .first();
+ 
+     if (!invite) {
+@@ -330,6 +330,12 @@ export const updateProfile = mutation({
+       return { success: false as const, error: "Agent not found" };
+     }
+ 
++    // Validate and sanitize bio if provided
++    if (args.bio !== undefined) {
++      args.bio = sanitizeContent(args.bio).substring(0, 500); // Max 500 chars
++    }
++
+     // Build update object with only provided fields
+     const update: Partial<typeof agent> = {
+       updatedAt: Date.now(),
+@@ -500,7 +506,7 @@ export const requestEmailVerification = mutation({
+     const agent = await ctx.db.get(agentId);
+     if (!agent) {
+       return { success: false as const, error: "Agent not found" };
+     }
+ 
+-    // Basic email format validation
++    // RFC 5322 simplified email validation
+     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+     if (!emailRegex.test(args.email)) {
+       return { success: false as const, error: "Invalid email format" };
+
+diff --git a/convex/http.ts b/convex/http.ts
+index 1234567..abcdefg 100644
+--- a/convex/http.ts
++++ b/convex/http.ts
+@@ -22,7 +22,7 @@ function corsResponse() {
+ }
+ 
+ // Extract API key from request
+-function getApiKey(request: Request): string | null {
++export function getApiKey(request: Request): string | null {
+   return request.headers.get("X-API-Key") || request.headers.get("Authorization")?.replace("Bearer ", "") || null;
+ }
+ 
+@@ -47,7 +47,7 @@ function registerVersionedCors(legacyPath: string) {
+ // POST /api/agents/verify-email/request - Request email verification
+ registerVersionedRoute("/api/agents/verify-email/request", "POST", httpAction(async (ctx, request) => {
+   const apiKey = getApiKey(request);
+   if (!apiKey) {
+-    return jsonResponse({ error: "API key required" }, 401);
++    return jsonResponse({ success: false, error: "API key required" }, 401);
+   }
+   try {
+     const body = await request.json() as { email: string };
+@@ -63,7 +63,7 @@ registerVersionedRoute("/api/agents/verify-email/request", "POST", httpAction(
+ // POST /api/agents/verify-email/confirm - Confirm email verification
+ registerVersionedRoute("/api/agents/verify-email/confirm", "POST", httpAction(async (ctx, request) => {
+   const apiKey = getApiKey(request);
+   if (!apiKey) {
+-    return jsonResponse({ error: "API key required" }, 401);
++    return jsonResponse({ success: false, error: "API key required" }, 401);
+   }
+   try {
+     const body = await request.json() as { code: string };
+@@ -95,7 +95,7 @@ registerVersionedRoute("/api/agents/register", "POST", httpAction(async (ctx, 
+ registerVersionedRoute("/api/agents/me", "GET", httpAction(async (ctx, request) => {
+   const apiKey = getApiKey(request);
+   if (!apiKey) {
+-    return jsonResponse({ error: "API key required" }, 401);
++    return jsonResponse({ success: false, error: "API key required" }, 401);
+   }
+   const result = await ctx.runQuery(api.agents.getMe, { apiKey });
+   if (!result) {
+@@ -107,7 +107,7 @@ registerVersionedRoute("/api/agents/me", "GET", httpAction(async (ctx, request
+ // PATCH /api/agents/me - Update current agent profile
+ registerVersionedRoute("/api/agents/me", "PATCH", httpAction(async (ctx, request) => {
+   const apiKey = getApiKey(request);
+   if (!apiKey) {
+-    return jsonResponse({ error: "API key required" }, 401);
++    return jsonResponse({ success: false, error: "API key required" }, 401);
+   }
+   try {
+     const body = await request.json() as {

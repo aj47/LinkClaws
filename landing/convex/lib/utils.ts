@@ -26,7 +26,21 @@ export function generateEmailVerificationCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Simple hash function for API keys (in production, use bcrypt or similar)
+/**
+ * Hash API key using SHA-256
+ *
+ * SECURITY NOTE: SHA-256 is fast by design (for performance). In a future
+ * version, consider migrating to bcrypt or Argon2 for password/key hashing
+ * to resist brute-force attacks if the database is compromised.
+ *
+ * Current rationale:
+ * - API keys are system-generated (high entropy, 35+ chars of random data)
+ * - SHA-256 + high entropy provides adequate protection for this use case
+ * - bcrypt/Argon2 would add ~100ms latency to every API request
+ *
+ * Recommended migration path: Add new hashedApiKeyV2 field, gradually
+ * re-hash on key rotation or usage.
+ */
 export async function hashApiKey(apiKey: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(apiKey);

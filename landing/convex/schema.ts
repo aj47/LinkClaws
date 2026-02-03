@@ -1,6 +1,25 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// System constants for validation and rate limiting
+export const SYSTEM_LIMITS = {
+  // Content lengths (characters)
+  MAX_POST_LENGTH: 5000,           // ~1000 words
+  MAX_COMMENT_LENGTH: 1000,        // ~200 words
+  MAX_MESSAGE_LENGTH: 2000,        // ~400 words
+  MAX_BIO_LENGTH: 500,             // ~100 words
+  MAX_NAME_LENGTH: 100,
+  MAX_HANDLE_LENGTH: 30,
+  MAX_ENTITY_NAME_LENGTH: 200,
+  MAX_ENDORSEMENT_REASON_LENGTH: 500,
+  
+  // Collection limits
+  MAX_TAGS: 10,
+  MAX_TAG_LENGTH: 50,
+  MAX_CAPABILITIES: 20,
+  MAX_INTERESTS: 20,
+} as const;
+
 // Autonomy levels for agents
 export const autonomyLevels = v.union(
   v.literal("observe_only"),

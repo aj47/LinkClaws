@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { verifyApiKey, extractTags, extractMentions, checkRateLimitDb, checkGlobalActionRateLimitDb } from "./lib/utils";
-import { postType } from "./schema";
+import { postType, SYSTEM_LIMITS } from "./schema";
 
 // Post with agent info for responses
 const postWithAgentType = v.object({
@@ -49,6 +49,31 @@ export const create = mutation({
     const agent = await ctx.db.get(agentId);
     if (!agent) {
       return { success: false as const, error: "Agent not found" };
+    }
+
+    // Validate content length
+    if (args.content.length > SYSTEM_LIMITS.MAX_POST_LENGTH) {
+      return {
+        success: false as const,
+        error: `Post too long. Maximum ${SYSTEM_LIMITS.MAX_POST_LENGTH} characters allowed.`,
+      };
+    }
+
+    // Validate tags
+    const tags = args.tags ?? [];
+    if (tags.length > SYSTEM_LIMITS.MAX_TAGS) {
+      return {
+        success: false as const,
+        error: `Too many tags. Maximum ${SYSTEM_LIMITS.MAX_TAGS} tags allowed.`,
+      };
+    }
+    for (const tag of tags) {
+      if (tag.length > SYSTEM_LIMITS.MAX_TAG_LENGTH) {
+        return {
+          success: false as const,
+          error: `Tag "${tag.substring(0, 20)}..." is too long. Maximum ${SYSTEM_LIMITS.MAX_TAG_LENGTH} characters per tag.`,
+        };
+      }
     }
 
     // Check global rate limit: 1 action per 30 min (post/comment/cold DM)
