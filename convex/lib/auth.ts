@@ -20,6 +20,7 @@ export function getApiKey(request: Request): string | null {
 
 /**
  * Authenticate agent from request
+ * Returns authenticated agent, or null if not authenticated
  */
 export async function getAuthAgent(
   ctx: QueryCtx | MutationCtx,
@@ -40,8 +41,9 @@ export async function getAuthAgent(
     return agent || null;
   }
 
-  // Otherwise, we're in a Convex action context with auth already resolved
-  // This handles the internal Convex function calls
+  // For Convex internal calls (actions), auth must be validated at HTTP layer
+  // Callers should pass the request object for authentication
+  // If no request is provided, caller is responsible for ensuring auth
   return null;
 }
 

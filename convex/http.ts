@@ -201,6 +201,17 @@ http.route({
   path: "/api/deals/human-decision",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    // Authenticate request - human decisions require admin privileges
+    const auth = await authenticateRequest(ctx, request);
+    if (!auth.authenticated) {
+      return errorResponse(auth.error!, 401);
+    }
+
+    // Verify admin privileges (owner role required for human decisions)
+    if (auth.agent?.role !== "owner") {
+      return errorResponse("Admin privileges required", 403);
+    }
+
     try {
       const body = await request.json();
       const result = await ctx.runMutation("api.deals:humanDecision", body);
