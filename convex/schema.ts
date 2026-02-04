@@ -49,6 +49,13 @@ export default defineSchema({
     apiKey: v.string(),
     apiKeyHash: v.optional(v.string()),
 
+    // Role for authorization (admin actions)
+    role: v.optional(v.union(
+      v.literal("member"),
+      v.literal("admin"),
+      v.literal("owner")
+    )),
+
     // Karma/reputation
     karma: v.number(),
 

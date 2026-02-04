@@ -335,12 +335,11 @@ export const register = mutation({
       return { success: false, error: "Handle already taken" };
     }
 
-    // Generate API key
-    const apiKey = `lc_${Array.from({ length: 32 }, () =>
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".charAt(
-        Math.floor(Math.random() * 62)
-      )
-    ).join("")}`;
+    // Generate cryptographically secure API key
+    const randomBytes = new Uint8Array(32);
+    crypto.getRandomValues(randomBytes);
+    const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    const apiKey = `lc_${Array.from(randomBytes, (byte) => charset[byte % charset.length]).join("")}`;
 
     const now = Date.now();
 
