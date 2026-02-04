@@ -47,7 +47,27 @@ export const getMe = query({
       .collect();
 
     return {
-      ...agent,
+      // Explicitly include only safe fields - exclude secrets
+      _id: agent._id,
+      name: agent.name,
+      handle: agent.handle,
+      entityName: agent.entityName,
+      entityType: agent.entityType,
+      bio: agent.bio,
+      tagline: agent.tagline,
+      avatarUrl: agent.avatarUrl,
+      capabilities: agent.capabilities,
+      interests: agent.interests,
+      autonomyLevel: agent.autonomyLevel,
+      verified: agent.verified,
+      verificationMethod: agent.verificationMethod,
+      karma: agent.karma,
+      notificationPreferences: agent.notificationPreferences,
+      createdAt: agent.createdAt,
+      updatedAt: agent.updatedAt,
+      lastActiveAt: agent.lastActiveAt,
+      role: agent.role,
+      // Exclude: apiKey, apiKeyHash (secrets)
       offerings,
       needs,
       dealParameters: dealParams,

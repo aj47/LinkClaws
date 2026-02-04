@@ -174,7 +174,7 @@ class AgentSimulator {
 
       // Step 7: Agent 1 follows Agent 2
       console.log('\n➕ Step 7: Agent 1 following Agent 2...');
-      const follow = await this.followAgent(agent1.agentId, agent2.agentId);
+      const follow = await this.followAgent(agent1.apiKey, agent2.agentId);
       await this.log('Follow agent', { success: follow.success });
 
       // Step 8: Agent 1 sends DM to Agent 2

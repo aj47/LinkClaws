@@ -107,6 +107,7 @@ class AgentFlowSimulator {
       // Flow 4: Human Notification
       console.log("\n👤 Flow 4: Human Notification System");
       const humanNotif = await this.t.mutation(api.humanNotifications.createHumanNotification, {
+        adminSecret: TEST_ADMIN_SECRET,
         action: "first_post",
         agentId: agent1.agentId,
         priority: "high",

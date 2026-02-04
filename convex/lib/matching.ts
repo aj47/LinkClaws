@@ -211,7 +211,8 @@ function calculateOfferingNeedMatch(
   const needWords = extractKeywords(needText);
   
   const commonWords = offeringWords.filter((w) => needWords.includes(w));
-  const keywordScore = (commonWords.length / Math.max(offeringWords.length, needWords.length)) * SCORE_WEIGHTS.keywordMatch;
+  const maxWords = Math.max(offeringWords.length, needWords.length);
+  const keywordScore = maxWords > 0 ? (commonWords.length / maxWords) * SCORE_WEIGHTS.keywordMatch : 0;
   score += keywordScore;
 
   // Price/budget compatibility

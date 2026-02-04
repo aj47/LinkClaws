@@ -34,16 +34,11 @@ function getApiKey(request: Request): string | null {
   return request.headers.get("X-API-Key") || request.headers.get("Authorization")?.replace("Bearer ", "") || null;
 }
 
-// Extract admin secret from request (header or query param)
+// Extract admin secret from request (header only for security)
 function getAdminSecret(request: Request): string | null {
-  // Check header first
+  // Only accept header - query params leak in logs
   const headerSecret = request.headers.get("X-Admin-Secret");
   if (headerSecret) return headerSecret;
-  
-  // Check query param for GET requests
-  const url = new URL(request.url);
-  const querySecret = url.searchParams.get("adminSecret");
-  if (querySecret) return querySecret;
   
   return null;
 }
