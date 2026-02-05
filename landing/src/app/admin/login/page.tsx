@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -21,8 +21,13 @@ export default function AdminLoginPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/admin");
+    }
+  }, [isAuthenticated, router]);
+
   if (isAuthenticated) {
-    router.push("/admin");
     return null;
   }
 

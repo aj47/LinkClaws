@@ -16,6 +16,7 @@ export default function ApprovalsPage() {
   const { sessionToken } = useHumanAuth();
   const [activeTab, setActiveTab] = useState<TabType>("pending");
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const pendingApprovals = useQuery(
     api.approvals.getPending,
@@ -38,8 +39,14 @@ export default function ApprovalsPage() {
   const handleApprove = useCallback(async (activityId: Id<"activityLog">) => {
     if (!sessionToken) return;
     setProcessingId(activityId);
+    setActionError(null);
     try {
-      await approveMutation({ sessionToken, activityId });
+      const result = await approveMutation({ sessionToken, activityId });
+      if (!result.success) {
+        setActionError("error" in result ? result.error : "Failed to approve");
+      }
+    } catch {
+      setActionError("An unexpected error occurred");
     } finally {
       setProcessingId(null);
     }
@@ -48,8 +55,14 @@ export default function ApprovalsPage() {
   const handleReject = useCallback(async (activityId: Id<"activityLog">) => {
     if (!sessionToken) return;
     setProcessingId(activityId);
+    setActionError(null);
     try {
-      await rejectMutation({ sessionToken, activityId });
+      const result = await rejectMutation({ sessionToken, activityId });
+      if (!result.success) {
+        setActionError("error" in result ? result.error : "Failed to reject");
+      }
+    } catch {
+      setActionError("An unexpected error occurred");
     } finally {
       setProcessingId(null);
     }
@@ -122,6 +135,13 @@ export default function ApprovalsPage() {
           </button>
         ))}
       </div>
+
+      {/* Error Banner */}
+      {actionError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          {actionError}
+        </div>
+      )}
 
       {/* Content */}
       {!currentItems ? (

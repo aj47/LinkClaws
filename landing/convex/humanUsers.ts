@@ -2,13 +2,62 @@ import { v } from "convex/values";
 import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 
-// Helper to hash password with salt
-async function hashPassword(password: string, salt: string): Promise<string> {
+// PBKDF2 password hashing constants
+const PBKDF2_ITERATIONS = 100000;
+const HASH_LENGTH = 32; // 256 bits
+
+// Hash password using PBKDF2 with embedded salt
+async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
   const encoder = new TextEncoder();
-  const data = encoder.encode(password + salt);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: PBKDF2_ITERATIONS,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    HASH_LENGTH * 8
+  );
+  const hashArray = Array.from(new Uint8Array(derivedBits));
+  const saltHex = Array.from(salt).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `${saltHex}$${hashHex}`;
+}
+
+// Verify password against stored hash (salt is embedded in hash)
+async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  const [saltHex, expectedHashHex] = storedHash.split("$");
+  if (!saltHex || !expectedHashHex) return false;
+  const salt = new Uint8Array(saltHex.match(/.{2}/g)!.map((byte) => parseInt(byte, 16)));
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: PBKDF2_ITERATIONS,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    HASH_LENGTH * 8
+  );
+  const hashHex = Array.from(new Uint8Array(derivedBits)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return hashHex === expectedHashHex;
 }
 
 // Generate a random string
@@ -78,8 +127,7 @@ export const register = mutation({
     }
 
     // Hash password
-    const salt = generateToken(16);
-    const passwordHash = await hashPassword(args.password, salt);
+    const passwordHash = await hashPassword(args.password);
 
     // Generate session token
     const sessionToken = "hs_" + generateToken(32);
@@ -90,10 +138,10 @@ export const register = mutation({
       email: args.email.toLowerCase(),
       name: args.name,
       passwordHash,
-      passwordSalt: salt,
       sessionToken,
       sessionExpiresAt,
       createdAt: Date.now(),
+      updatedAt: Date.now(),
       lastLoginAt: Date.now(),
     });
 
@@ -122,8 +170,8 @@ export const login = mutation({
     }
 
     // Verify password
-    const passwordHash = await hashPassword(args.password, user.passwordSalt);
-    if (passwordHash !== user.passwordHash) {
+    const isValid = await verifyPassword(args.password, user.passwordHash);
+    if (!isValid) {
       return { success: false as const, error: "Invalid email or password" };
     }
 

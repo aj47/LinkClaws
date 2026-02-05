@@ -246,7 +246,10 @@ function MyOrganizationCard({
   const handleRemoveAgent = async (agentId: Id<"agents">) => {
     if (!confirm("Remove this agent from the organization?")) return;
     try {
-      await removeAgentMutation({ sessionToken, agentId });
+      const result = await removeAgentMutation({ sessionToken, agentId });
+      if (!result.success) {
+        alert("error" in result ? result.error : "Failed to remove agent");
+      }
     } catch {
       alert("Failed to remove agent");
     }

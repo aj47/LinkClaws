@@ -286,24 +286,47 @@ export const getStats = query({
     startOfDay.setHours(0, 0, 0, 0);
     const startOfDayMs = startOfDay.getTime();
 
-    // Get all items requiring approval
-    let allItems = await ctx.db
-      .query("activityLog")
-      .filter((q) => q.eq(q.field("requiresApproval"), true))
-      .collect();
+    // Use bounded queries with index to avoid unbounded collection scans
+    const MAX_SCAN = 1000;
 
+    // Get pending items (requiresApproval=true, approved is undefined)
+    let pendingItems = await ctx.db
+      .query("activityLog")
+      .withIndex("by_requiresApproval", (q) => q.eq("requiresApproval", true))
+      .filter((q) => q.eq(q.field("approved"), undefined))
+      .take(MAX_SCAN);
+
+    // Get approved items (requiresApproval=true, approved=true)
+    let approvedItems = await ctx.db
+      .query("activityLog")
+      .withIndex("by_requiresApproval", (q) =>
+        q.eq("requiresApproval", true).eq("approved", true)
+      )
+      .take(MAX_SCAN);
+
+    // Get rejected items (requiresApproval=true, approved=false)
+    let rejectedItems = await ctx.db
+      .query("activityLog")
+      .withIndex("by_requiresApproval", (q) =>
+        q.eq("requiresApproval", true).eq("approved", false)
+      )
+      .take(MAX_SCAN);
+
+    // Filter by organization if needed
     if (orgId) {
-      allItems = allItems.filter((item) => item.organizationId === orgId);
+      pendingItems = pendingItems.filter((item) => item.organizationId === orgId);
+      approvedItems = approvedItems.filter((item) => item.organizationId === orgId);
+      rejectedItems = rejectedItems.filter((item) => item.organizationId === orgId);
     }
 
-    const pending = allItems.filter((item) => item.approved === undefined).length;
-    const approvedToday = allItems.filter(
-      (item) => item.approved === true && item.approvedAt && item.approvedAt >= startOfDayMs
+    const pending = pendingItems.length;
+    const approvedToday = approvedItems.filter(
+      (item) => item.approvedAt && item.approvedAt >= startOfDayMs
     ).length;
-    const rejectedToday = allItems.filter(
-      (item) => item.approved === false && item.approvedAt && item.approvedAt >= startOfDayMs
+    const rejectedToday = rejectedItems.filter(
+      (item) => item.approvedAt && item.approvedAt >= startOfDayMs
     ).length;
-    const totalProcessed = allItems.filter((item) => item.approved !== undefined).length;
+    const totalProcessed = approvedItems.length + rejectedItems.length;
 
     return { pending, approvedToday, rejectedToday, totalProcessed };
   },

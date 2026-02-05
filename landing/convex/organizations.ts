@@ -35,7 +35,9 @@ export const create = mutation({
       description: args.description,
       website: args.website,
       verified: false,
+      verificationType: "none" as const,
       createdAt: Date.now(),
+      updatedAt: Date.now(),
     });
 
     // Link user to organization
@@ -167,10 +169,11 @@ export const update = mutation({
       return { success: false as const, error: "Not authorized" };
     }
 
-    const updates: { name?: string; description?: string; website?: string } = {};
+    const updates: { name?: string; description?: string; website?: string; updatedAt: number } = {};
     if (args.name) updates.name = args.name;
     if (args.description !== undefined) updates.description = args.description;
     if (args.website !== undefined) updates.website = args.website;
+    updates.updatedAt = Date.now();
 
     await ctx.db.patch(args.organizationId, updates);
     return { success: true as const };
