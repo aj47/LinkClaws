@@ -41,16 +41,23 @@ export const getPending = query({
 
     const limit = args.limit ?? 50;
 
+    // Note: Users without an organizationId see approvals across all organizations
+    // (intentional super-admin behavior for platform-level oversight).
+    const orgId = args.organizationId ?? user.organizationId;
+
+    // Use a larger scan window to account for JS-side filtering by org/status,
+    // reducing the chance of returning fewer than `limit` results.
+    const scanMultiplier = orgId ? 5 : 2;
+
     // Get items requiring approval that haven't been processed
     const allItems = await ctx.db
       .query("activityLog")
       .withIndex("by_requiresApproval")
       .filter((q) => q.eq(q.field("requiresApproval"), true))
       .order("desc")
-      .take(limit * 2);
+      .take(limit * scanMultiplier);
 
     // Filter to pending items (approved is undefined) and by organization
-    const orgId = args.organizationId ?? user.organizationId;
     let pendingItems = allItems.filter((item) => item.approved === undefined);
     if (orgId) {
       pendingItems = pendingItems.filter((item) => item.organizationId === orgId);
@@ -127,6 +134,11 @@ export const approve = mutation({
       return { success: false as const, error: "Activity does not require approval" };
     }
 
+    // Prevent overwriting already-processed activities to preserve audit trail
+    if (activity.approved !== undefined) {
+      return { success: false as const, error: "Activity has already been processed" };
+    }
+
     if (activity.organizationId && user.organizationId !== activity.organizationId) {
       return { success: false as const, error: "Not authorized to approve this activity" };
     }
@@ -171,6 +183,11 @@ export const reject = mutation({
       return { success: false as const, error: "Activity does not require approval" };
     }
 
+    // Prevent overwriting already-processed activities to preserve audit trail
+    if (activity.approved !== undefined) {
+      return { success: false as const, error: "Activity has already been processed" };
+    }
+
     if (activity.organizationId && user.organizationId !== activity.organizationId) {
       return { success: false as const, error: "Not authorized to reject this activity" };
     }
@@ -202,16 +219,22 @@ export const getHistory = query({
 
     const limit = args.limit ?? 50;
 
+    // Note: Users without an organizationId see history across all organizations
+    // (intentional super-admin behavior for platform-level oversight).
+    const orgId = args.organizationId ?? user.organizationId;
+
+    // Use a larger scan window to account for JS-side filtering by org/status
+    const scanMultiplier = orgId ? 5 : 3;
+
     // Get items that have been processed (approved is defined)
     const allItems = await ctx.db
       .query("activityLog")
       .withIndex("by_requiresApproval")
       .filter((q) => q.eq(q.field("requiresApproval"), true))
       .order("desc")
-      .take(limit * 3);
+      .take(limit * scanMultiplier);
 
     // Filter to only processed items and by organization
-    const orgId = args.organizationId ?? user.organizationId;
     let processedItems = allItems.filter((item) => item.approved !== undefined);
     if (orgId) {
       processedItems = processedItems.filter((item) => item.organizationId === orgId);
@@ -281,19 +304,25 @@ export const getStats = query({
       return { pending: 0, approvedToday: 0, rejectedToday: 0, totalProcessed: 0 };
     }
 
+    // Note: Users without an organizationId see stats across all organizations
+    // (intentional super-admin behavior for platform-level oversight).
     const orgId = args.organizationId ?? user.organizationId;
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const startOfDayMs = startOfDay.getTime();
 
-    // Use bounded queries with index to avoid unbounded collection scans
+    // Bounded queries using the composite index to avoid unbounded collection scans.
+    // Note: Counts are approximate once rows exceed MAX_SCAN per category.
+    // For exact counts at scale, consider a dedicated counters table.
     const MAX_SCAN = 1000;
 
     // Get pending items (requiresApproval=true, approved is undefined)
+    // Order desc so newest items are scanned first (important for "today" counts)
     let pendingItems = await ctx.db
       .query("activityLog")
       .withIndex("by_requiresApproval", (q) => q.eq("requiresApproval", true))
       .filter((q) => q.eq(q.field("approved"), undefined))
+      .order("desc")
       .take(MAX_SCAN);
 
     // Get approved items (requiresApproval=true, approved=true)
@@ -302,6 +331,7 @@ export const getStats = query({
       .withIndex("by_requiresApproval", (q) =>
         q.eq("requiresApproval", true).eq("approved", true)
       )
+      .order("desc")
       .take(MAX_SCAN);
 
     // Get rejected items (requiresApproval=true, approved=false)
@@ -310,6 +340,7 @@ export const getStats = query({
       .withIndex("by_requiresApproval", (q) =>
         q.eq("requiresApproval", true).eq("approved", false)
       )
+      .order("desc")
       .take(MAX_SCAN);
 
     // Filter by organization if needed
