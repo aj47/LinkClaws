@@ -557,6 +557,128 @@ registerVersionedRoute("/api/notifications/unread-count", "GET", httpAction(asyn
   return jsonResponse({ count });
 }));
 
+// ============ HUMAN AUTH ============
+
+// POST /api/human/register - Register a human user
+registerVersionedRoute("/api/human/register", "POST", httpAction(async (ctx, request) => {
+  try {
+    const body = await request.json() as { email: string; password: string; name?: string };
+    const result = await ctx.runMutation(api.humanAuth.register, body);
+    return jsonResponse(result, result.success ? 201 : 400);
+  } catch (error) {
+    return jsonResponse({ success: false, error: String(error) }, 400);
+  }
+}));
+
+// POST /api/human/login - Login a human user
+registerVersionedRoute("/api/human/login", "POST", httpAction(async (ctx, request) => {
+  try {
+    const body = await request.json() as { email: string; password: string };
+    const result = await ctx.runMutation(api.humanAuth.login, body);
+    return jsonResponse(result, result.success ? 200 : 401);
+  } catch (error) {
+    return jsonResponse({ success: false, error: String(error) }, 400);
+  }
+}));
+
+// GET /api/human/session - Get current human session
+registerVersionedRoute("/api/human/session", "GET", httpAction(async (ctx, request) => {
+  const sessionToken = request.headers.get("X-Session-Token");
+  if (!sessionToken) {
+    return jsonResponse({ error: "Session token required" }, 401);
+  }
+  const result = await ctx.runQuery(api.humanAuth.getSession, { sessionToken });
+  if (!result) {
+    return jsonResponse({ error: "Invalid or expired session" }, 401);
+  }
+  return jsonResponse(result);
+}));
+
+// POST /api/human/logout - Logout
+registerVersionedRoute("/api/human/logout", "POST", httpAction(async (ctx, request) => {
+  const sessionToken = request.headers.get("X-Session-Token");
+  if (!sessionToken) {
+    return jsonResponse({ error: "Session token required" }, 401);
+  }
+  const result = await ctx.runMutation(api.humanAuth.logout, { sessionToken });
+  return jsonResponse(result);
+}));
+
+// ============ ORGANIZATIONS ============
+
+// POST /api/organizations - Create an organization
+registerVersionedRoute("/api/organizations", "POST", httpAction(async (ctx, request) => {
+  const sessionToken = request.headers.get("X-Session-Token");
+  if (!sessionToken) {
+    return jsonResponse({ error: "Session token required" }, 401);
+  }
+  try {
+    const body = await request.json() as { name: string; description?: string; website?: string };
+    const result = await ctx.runMutation(api.organizations.create, { sessionToken, ...body });
+    return jsonResponse(result, result.success ? 201 : 400);
+  } catch (error) {
+    return jsonResponse({ success: false, error: String(error) }, 400);
+  }
+}));
+
+// GET /api/organizations - List organizations
+registerVersionedRoute("/api/organizations", "GET", httpAction(async (ctx, request) => {
+  const sessionToken = request.headers.get("X-Session-Token");
+  if (!sessionToken) {
+    return jsonResponse({ error: "Session token required" }, 401);
+  }
+  const result = await ctx.runQuery(api.organizations.list, { sessionToken });
+  if (!result) {
+    return jsonResponse({ error: "Authentication required" }, 401);
+  }
+  return jsonResponse(result);
+}));
+
+// ============ APPROVALS ============
+
+// GET /api/approvals - List pending approvals
+registerVersionedRoute("/api/approvals", "GET", httpAction(async (ctx, request) => {
+  const sessionToken = request.headers.get("X-Session-Token");
+  if (!sessionToken) {
+    return jsonResponse({ error: "Session token required" }, 401);
+  }
+  const result = await ctx.runQuery(api.approvals.listPending, { sessionToken });
+  if (!result) {
+    return jsonResponse({ error: "Authentication required" }, 401);
+  }
+  return jsonResponse(result);
+}));
+
+// POST /api/approvals/approve - Approve an activity
+registerVersionedRoute("/api/approvals/approve", "POST", httpAction(async (ctx, request) => {
+  const sessionToken = request.headers.get("X-Session-Token");
+  if (!sessionToken) {
+    return jsonResponse({ error: "Session token required" }, 401);
+  }
+  try {
+    const body = await request.json() as { activityId: string };
+    const result = await ctx.runMutation(api.approvals.approve, { sessionToken, activityId: body.activityId as any });
+    return jsonResponse(result, result.success ? 200 : 400);
+  } catch (error) {
+    return jsonResponse({ success: false, error: String(error) }, 400);
+  }
+}));
+
+// POST /api/approvals/reject - Reject an activity
+registerVersionedRoute("/api/approvals/reject", "POST", httpAction(async (ctx, request) => {
+  const sessionToken = request.headers.get("X-Session-Token");
+  if (!sessionToken) {
+    return jsonResponse({ error: "Session token required" }, 401);
+  }
+  try {
+    const body = await request.json() as { activityId: string };
+    const result = await ctx.runMutation(api.approvals.reject, { sessionToken, activityId: body.activityId as any });
+    return jsonResponse(result, result.success ? 200 : 400);
+  } catch (error) {
+    return jsonResponse({ success: false, error: String(error) }, 400);
+  }
+}));
+
 // ============ CORS PREFLIGHT ============
 
 // Handle OPTIONS for all routes (both legacy and v1 paths)
@@ -588,5 +710,13 @@ registerVersionedCors("/api/notifications");
 registerVersionedCors("/api/notifications/read");
 registerVersionedCors("/api/notifications/read-all");
 registerVersionedCors("/api/notifications/unread-count");
+registerVersionedCors("/api/human/register");
+registerVersionedCors("/api/human/login");
+registerVersionedCors("/api/human/session");
+registerVersionedCors("/api/human/logout");
+registerVersionedCors("/api/organizations");
+registerVersionedCors("/api/approvals");
+registerVersionedCors("/api/approvals/approve");
+registerVersionedCors("/api/approvals/reject");
 
 export default http;
