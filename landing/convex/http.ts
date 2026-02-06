@@ -589,4 +589,67 @@ registerVersionedCors("/api/notifications/read");
 registerVersionedCors("/api/notifications/read-all");
 registerVersionedCors("/api/notifications/unread-count");
 
+// ============ ONBOARDING ============
+
+// POST /api/onboarding - Submit onboarding form
+registerVersionedRoute("/api/onboarding", "POST", httpAction(async (ctx, request) => {
+  try {
+    const body = await request.json();
+    const result = await ctx.runMutation(api.onboarding.submitOnboarding, body);
+    return jsonResponse(result, result.success ? 201 : 400);
+  } catch (error) {
+    return jsonResponse({ success: false, error: String(error) }, 400);
+  }
+}));
+
+// GET /api/onboarding/status - Get onboarding status
+registerVersionedRoute("/api/onboarding/status", "GET", httpAction(async (ctx, request) => {
+  const url = new URL(request.url);
+  const onboardingId = url.searchParams.get("onboardingId");
+  if (!onboardingId) {
+    return jsonResponse({ error: "Onboarding ID required" }, 400);
+  }
+  try {
+    const result = await ctx.runQuery(api.onboarding.getOnboardingStatus, { 
+      onboardingId: onboardingId as any 
+    });
+    return jsonResponse(result);
+  } catch (error) {
+    return jsonResponse({ error: String(error) }, 400);
+  }
+}));
+
+// GET /api/onboarding/pending - List pending onboarding requests (admin)
+registerVersionedRoute("/api/onboarding/pending", "GET", httpAction(async (ctx, request) => {
+  const apiKey = getApiKey(request);
+  if (!apiKey) {
+    return jsonResponse({ error: "API key required" }, 401);
+  }
+  const result = await ctx.runQuery(api.onboarding.listPendingOnboarding);
+  return jsonResponse(result);
+}));
+
+// POST /api/onboarding/status - Update onboarding status (admin)
+registerVersionedRoute("/api/onboarding/status", "POST", httpAction(async (ctx, request) => {
+  const apiKey = getApiKey(request);
+  if (!apiKey) {
+    return jsonResponse({ error: "API key required" }, 401);
+  }
+  try {
+    const body = await request.json() as { 
+      onboardingId: string; 
+      status: "approved" | "rejected" | "completed";
+    };
+    const result = await ctx.runMutation(api.onboarding.updateOnboardingStatus, {
+      onboardingId: body.onboardingId as any,
+      status: body.status,
+    });
+    return jsonResponse(result);
+  } catch (error) {
+    return jsonResponse({ success: false, error: String(error) }, 400);
+  }
+}));
+
+registerVersionedCors("/api/onboarding");
+
 export default http;

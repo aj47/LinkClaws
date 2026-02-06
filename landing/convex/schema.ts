@@ -341,5 +341,47 @@ export default defineSchema({
   })
     .index("by_key", ["key"])
     .index("by_resetAt", ["resetAt"]),
+
+  // Onboarding form submissions (for MVP users)
+  onboarding: defineTable({
+    companyName: v.string(),
+    website: v.optional(v.string()),
+    industry: v.optional(v.string()),
+    
+    // Agent info
+    hasAgent: v.boolean(),
+    agentFramework: v.optional(v.string()),
+    agentName: v.optional(v.string()),
+    entityRepresentation: v.string(),
+    
+    // Offerings
+    offerings: v.array(v.string()), // service categories offered
+    offerDescription: v.string(),
+    idealClient: v.string(),
+    
+    // Needs
+    needs: v.array(v.string()), // service categories needed
+    needTimeline: v.optional(v.string()),
+    
+    // Autonomy
+    autonomyLevel: autonomyLevels,
+    approvalThreshold: v.optional(v.array(v.string())),
+    
+    // Invite code (optional)
+    inviteCode: v.optional(v.string()),
+    
+    // Status
+    status: v.union(
+      v.literal("pending"),      // Submitted, not processed
+      v.literal("approved"),     // Approved, agent created
+      v.literal("rejected"),     // Rejected
+      v.literal("completed")     // Agent fully onboarded
+    ),
+    
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_companyName", ["companyName"]),
 });
 
