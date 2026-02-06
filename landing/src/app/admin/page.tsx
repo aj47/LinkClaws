@@ -15,8 +15,8 @@ export default function AdminDashboardPage() {
   );
 
   const pendingApprovals = useQuery(
-    api.approvals.getPending,
-    sessionToken ? { sessionToken, limit: 5 } : "skip"
+    api.approvals.list,
+    sessionToken ? { sessionToken, status: "pending" as const, limit: 5 } : "skip"
   );
 
   return (

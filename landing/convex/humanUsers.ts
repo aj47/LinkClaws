@@ -57,7 +57,17 @@ async function verifyPassword(password: string, storedHash: string): Promise<boo
     HASH_LENGTH * 8
   );
   const hashHex = Array.from(new Uint8Array(derivedBits)).map((b) => b.toString(16).padStart(2, "0")).join("");
-  return hashHex === expectedHashHex;
+  return timingSafeEqual(hashHex, expectedHashHex);
+}
+
+// Constant-time string comparison to prevent timing attacks
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
 }
 
 // Generate a random string
@@ -133,11 +143,17 @@ export const register = mutation({
     const sessionToken = "hs_" + generateToken(32);
     const sessionExpiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
 
+    // First registered user becomes admin + superAdmin, subsequent users are plain members
+    const existingUser = await ctx.db.query("humanUsers").first();
+    const isFirstUser = !existingUser;
+
     // Create user
     await ctx.db.insert("humanUsers", {
       email: args.email.toLowerCase(),
       name: args.name,
       passwordHash,
+      role: isFirstUser ? "admin" : "member",
+      superAdmin: isFirstUser ? true : undefined,
       sessionToken,
       sessionExpiresAt,
       createdAt: Date.now(),
@@ -216,6 +232,8 @@ export const getMe = query({
       _id: v.id("humanUsers"),
       email: v.string(),
       name: v.optional(v.string()),
+      role: v.union(v.literal("admin"), v.literal("member")),
+      superAdmin: v.optional(v.boolean()),
       organizationId: v.optional(v.id("organizations")),
       organizationName: v.optional(v.string()),
       createdAt: v.number(),
@@ -240,6 +258,8 @@ export const getMe = query({
       _id: user._id,
       email: user.email,
       name: user.name,
+      role: user.role,
+      superAdmin: user.superAdmin,
       organizationId: user.organizationId,
       organizationName,
       createdAt: user.createdAt,

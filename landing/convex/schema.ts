@@ -317,6 +317,8 @@ export default defineSchema({
     email: v.string(),
     name: v.optional(v.string()),
     passwordHash: v.string(),
+    role: v.union(v.literal("admin"), v.literal("member")),
+    superAdmin: v.optional(v.boolean()),
     organizationId: v.optional(v.id("organizations")),
 
     // Session management

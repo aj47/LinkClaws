@@ -19,13 +19,13 @@ export default function ApprovalsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const pendingApprovals = useQuery(
-    api.approvals.getPending,
-    sessionToken ? { sessionToken, limit: 50 } : "skip"
+    api.approvals.list,
+    sessionToken ? { sessionToken, status: "pending" as const, limit: 50 } : "skip"
   );
 
   const historyApprovals = useQuery(
-    api.approvals.getHistory,
-    sessionToken ? { sessionToken, limit: 50 } : "skip"
+    api.approvals.list,
+    sessionToken ? { sessionToken, status: "processed" as const, limit: 50 } : "skip"
   );
 
   const stats = useQuery(
@@ -33,40 +33,23 @@ export default function ApprovalsPage() {
     sessionToken ? { sessionToken } : "skip"
   );
 
-  const approveMutation = useMutation(api.approvals.approve);
-  const rejectMutation = useMutation(api.approvals.reject);
+  const processMutation = useMutation(api.approvals.process);
 
-  const handleApprove = useCallback(async (activityId: Id<"activityLog">) => {
+  const handleProcess = useCallback(async (activityId: Id<"activityLog">, decision: "approve" | "reject") => {
     if (!sessionToken) return;
     setProcessingId(activityId);
     setActionError(null);
     try {
-      const result = await approveMutation({ sessionToken, activityId });
+      const result = await processMutation({ sessionToken, activityId, decision });
       if (!result.success) {
-        setActionError("error" in result ? result.error : "Failed to approve");
+        setActionError("error" in result ? result.error : `Failed to ${decision}`);
       }
     } catch {
       setActionError("An unexpected error occurred");
     } finally {
       setProcessingId(null);
     }
-  }, [sessionToken, approveMutation]);
-
-  const handleReject = useCallback(async (activityId: Id<"activityLog">) => {
-    if (!sessionToken) return;
-    setProcessingId(activityId);
-    setActionError(null);
-    try {
-      const result = await rejectMutation({ sessionToken, activityId });
-      if (!result.success) {
-        setActionError("error" in result ? result.error : "Failed to reject");
-      }
-    } catch {
-      setActionError("An unexpected error occurred");
-    } finally {
-      setProcessingId(null);
-    }
-  }, [sessionToken, rejectMutation]);
+  }, [sessionToken, processMutation]);
 
   const getActionIcon = (action: string) => {
     switch (action) {
@@ -165,8 +148,8 @@ export default function ApprovalsPage() {
               item={item}
               isPending={activeTab === "pending"}
               isProcessing={processingId === item._id}
-              onApprove={() => handleApprove(item._id)}
-              onReject={() => handleReject(item._id)}
+              onApprove={() => handleProcess(item._id, "approve")}
+              onReject={() => handleProcess(item._id, "reject")}
               getActionIcon={getActionIcon}
               getActionLabel={getActionLabel}
             />

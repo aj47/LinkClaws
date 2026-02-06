@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, QueryCtx } from "./_generated/server";
+import { Doc } from "./_generated/dataModel";
 import { verifyHumanSession } from "./humanUsers";
 
 // Type for approval items
@@ -24,10 +25,46 @@ const approvalItemType = v.object({
   createdAt: v.number(),
 });
 
-// Get pending approvals
-export const getPending = query({
+// Shared helper to enrich a raw activityLog row with agent/org names
+async function enrichItem(ctx: QueryCtx, item: Doc<"activityLog">) {
+  const agent = await ctx.db.get(item.agentId);
+  let orgName: string | undefined;
+  if (item.organizationId) {
+    const org = await ctx.db.get(item.organizationId);
+    orgName = org?.name;
+  }
+  let relatedAgentHandle: string | undefined;
+  if (item.relatedAgentId) {
+    const relAgent = await ctx.db.get(item.relatedAgentId);
+    relatedAgentHandle = relAgent?.handle;
+  }
+  return {
+    _id: item._id,
+    agentId: item.agentId,
+    agentName: agent?.name ?? "Unknown",
+    agentHandle: agent?.handle ?? "unknown",
+    organizationId: item.organizationId,
+    organizationName: orgName,
+    action: item.action,
+    description: item.description,
+    relatedPostId: item.relatedPostId,
+    relatedCommentId: item.relatedCommentId,
+    relatedMessageId: item.relatedMessageId,
+    relatedAgentId: item.relatedAgentId,
+    relatedAgentHandle,
+    requiresApproval: item.requiresApproval,
+    approved: item.approved,
+    approvedAt: item.approvedAt,
+    approvedBy: item.approvedBy,
+    createdAt: item.createdAt,
+  };
+}
+
+// List approvals by status: "pending" or "processed"
+export const list = query({
   args: {
     sessionToken: v.string(),
+    status: v.union(v.literal("pending"), v.literal("processed")),
     organizationId: v.optional(v.id("organizations")),
     limit: v.optional(v.number()),
   },
@@ -40,16 +77,13 @@ export const getPending = query({
     if (!user) return [];
 
     const limit = args.limit ?? 50;
-
-    // Note: Users without an organizationId see approvals across all organizations
-    // (intentional super-admin behavior for platform-level oversight).
     const orgId = args.organizationId ?? user.organizationId;
 
-    // Use a larger scan window to account for JS-side filtering by org/status,
-    // reducing the chance of returning fewer than `limit` results.
+    // Cross-org access requires explicit superAdmin flag
+    if (!orgId && user.superAdmin !== true) return [];
+
     const scanMultiplier = orgId ? 5 : 2;
 
-    // Get items requiring approval that haven't been processed
     const allItems = await ctx.db
       .query("activityLog")
       .withIndex("by_requiresApproval")
@@ -57,58 +91,24 @@ export const getPending = query({
       .order("desc")
       .take(limit * scanMultiplier);
 
-    // Filter to pending items (approved is undefined) and by organization
-    let pendingItems = allItems.filter((item) => item.approved === undefined);
+    const isPending = args.status === "pending";
+    let filtered = allItems.filter((item) =>
+      isPending ? item.approved === undefined : item.approved !== undefined
+    );
     if (orgId) {
-      pendingItems = pendingItems.filter((item) => item.organizationId === orgId);
+      filtered = filtered.filter((item) => item.organizationId === orgId);
     }
 
-    const result = await Promise.all(
-      pendingItems.slice(0, limit).map(async (item) => {
-        const agent = await ctx.db.get(item.agentId);
-        let orgName: string | undefined;
-        if (item.organizationId) {
-          const org = await ctx.db.get(item.organizationId);
-          orgName = org?.name;
-        }
-        let relatedAgentHandle: string | undefined;
-        if (item.relatedAgentId) {
-          const relAgent = await ctx.db.get(item.relatedAgentId);
-          relatedAgentHandle = relAgent?.handle;
-        }
-
-        return {
-          _id: item._id,
-          agentId: item.agentId,
-          agentName: agent?.name ?? "Unknown",
-          agentHandle: agent?.handle ?? "unknown",
-          organizationId: item.organizationId,
-          organizationName: orgName,
-          action: item.action,
-          description: item.description,
-          relatedPostId: item.relatedPostId,
-          relatedCommentId: item.relatedCommentId,
-          relatedMessageId: item.relatedMessageId,
-          relatedAgentId: item.relatedAgentId,
-          relatedAgentHandle,
-          requiresApproval: item.requiresApproval,
-          approved: item.approved,
-          approvedAt: item.approvedAt,
-          approvedBy: item.approvedBy,
-          createdAt: item.createdAt,
-        };
-      })
-    );
-
-    return result;
+    return Promise.all(filtered.slice(0, limit).map((item) => enrichItem(ctx, item)));
   },
 });
 
-// Approve an activity
-export const approve = mutation({
+// Process (approve or reject) an activity
+export const process = mutation({
   args: {
     sessionToken: v.string(),
     activityId: v.id("activityLog"),
+    decision: v.union(v.literal("approve"), v.literal("reject")),
   },
   returns: v.union(
     v.object({ success: v.literal(true) }),
@@ -134,17 +134,21 @@ export const approve = mutation({
       return { success: false as const, error: "Activity does not require approval" };
     }
 
-    // Prevent overwriting already-processed activities to preserve audit trail
     if (activity.approved !== undefined) {
       return { success: false as const, error: "Activity has already been processed" };
     }
 
-    if (activity.organizationId && user.organizationId !== activity.organizationId) {
-      return { success: false as const, error: "Not authorized to approve this activity" };
+    // Org-scoped users can only process their own org's activities
+    if (user.organizationId && activity.organizationId !== user.organizationId) {
+      return { success: false as const, error: "Not authorized to process this activity" };
+    }
+    // Cross-org processing requires explicit superAdmin flag
+    if (!user.organizationId && user.superAdmin !== true) {
+      return { success: false as const, error: "Not authorized" };
     }
 
     await ctx.db.patch(args.activityId, {
-      approved: true,
+      approved: args.decision === "approve",
       approvedAt: Date.now(),
       approvedBy: user.email,
     });
@@ -153,135 +157,7 @@ export const approve = mutation({
   },
 });
 
-// Reject an activity
-export const reject = mutation({
-  args: {
-    sessionToken: v.string(),
-    activityId: v.id("activityLog"),
-  },
-  returns: v.union(
-    v.object({ success: v.literal(true) }),
-    v.object({ success: v.literal(false), error: v.string() })
-  ),
-  handler: async (ctx, args) => {
-    const userId = await verifyHumanSession(ctx, args.sessionToken);
-    if (!userId) {
-      return { success: false as const, error: "Not authenticated" };
-    }
-
-    const user = await ctx.db.get(userId);
-    if (!user) {
-      return { success: false as const, error: "User not found" };
-    }
-
-    const activity = await ctx.db.get(args.activityId);
-    if (!activity) {
-      return { success: false as const, error: "Activity not found" };
-    }
-
-    if (!activity.requiresApproval) {
-      return { success: false as const, error: "Activity does not require approval" };
-    }
-
-    // Prevent overwriting already-processed activities to preserve audit trail
-    if (activity.approved !== undefined) {
-      return { success: false as const, error: "Activity has already been processed" };
-    }
-
-    if (activity.organizationId && user.organizationId !== activity.organizationId) {
-      return { success: false as const, error: "Not authorized to reject this activity" };
-    }
-
-    await ctx.db.patch(args.activityId, {
-      approved: false,
-      approvedAt: Date.now(),
-      approvedBy: user.email,
-    });
-
-    return { success: true as const };
-  },
-});
-
-// Get approval history (recently processed)
-export const getHistory = query({
-  args: {
-    sessionToken: v.string(),
-    organizationId: v.optional(v.id("organizations")),
-    limit: v.optional(v.number()),
-  },
-  returns: v.array(approvalItemType),
-  handler: async (ctx, args) => {
-    const userId = await verifyHumanSession(ctx, args.sessionToken);
-    if (!userId) return [];
-
-    const user = await ctx.db.get(userId);
-    if (!user) return [];
-
-    const limit = args.limit ?? 50;
-
-    // Note: Users without an organizationId see history across all organizations
-    // (intentional super-admin behavior for platform-level oversight).
-    const orgId = args.organizationId ?? user.organizationId;
-
-    // Use a larger scan window to account for JS-side filtering by org/status
-    const scanMultiplier = orgId ? 5 : 3;
-
-    // Get items that have been processed (approved is defined)
-    const allItems = await ctx.db
-      .query("activityLog")
-      .withIndex("by_requiresApproval")
-      .filter((q) => q.eq(q.field("requiresApproval"), true))
-      .order("desc")
-      .take(limit * scanMultiplier);
-
-    // Filter to only processed items and by organization
-    let processedItems = allItems.filter((item) => item.approved !== undefined);
-    if (orgId) {
-      processedItems = processedItems.filter((item) => item.organizationId === orgId);
-    }
-
-    const result = await Promise.all(
-      processedItems.slice(0, limit).map(async (item) => {
-        const agent = await ctx.db.get(item.agentId);
-        let orgName: string | undefined;
-        if (item.organizationId) {
-          const org = await ctx.db.get(item.organizationId);
-          orgName = org?.name;
-        }
-        let relatedAgentHandle: string | undefined;
-        if (item.relatedAgentId) {
-          const relAgent = await ctx.db.get(item.relatedAgentId);
-          relatedAgentHandle = relAgent?.handle;
-        }
-
-        return {
-          _id: item._id,
-          agentId: item.agentId,
-          agentName: agent?.name ?? "Unknown",
-          agentHandle: agent?.handle ?? "unknown",
-          organizationId: item.organizationId,
-          organizationName: orgName,
-          action: item.action,
-          description: item.description,
-          relatedPostId: item.relatedPostId,
-          relatedCommentId: item.relatedCommentId,
-          relatedMessageId: item.relatedMessageId,
-          relatedAgentId: item.relatedAgentId,
-          relatedAgentHandle,
-          requiresApproval: item.requiresApproval,
-          approved: item.approved,
-          approvedAt: item.approvedAt,
-          approvedBy: item.approvedBy,
-          createdAt: item.createdAt,
-        };
-      })
-    );
-
-    return result;
-  },
-});
-
-// Get stats for dashboard
+// Get stats for dashboard (single scan)
 export const getStats = query({
   args: {
     sessionToken: v.string(),
@@ -294,70 +170,48 @@ export const getStats = query({
     totalProcessed: v.number(),
   }),
   handler: async (ctx, args) => {
+    const empty = { pending: 0, approvedToday: 0, rejectedToday: 0, totalProcessed: 0 };
+
     const userId = await verifyHumanSession(ctx, args.sessionToken);
-    if (!userId) {
-      return { pending: 0, approvedToday: 0, rejectedToday: 0, totalProcessed: 0 };
-    }
+    if (!userId) return empty;
 
     const user = await ctx.db.get(userId);
-    if (!user) {
-      return { pending: 0, approvedToday: 0, rejectedToday: 0, totalProcessed: 0 };
-    }
+    if (!user) return empty;
 
-    // Note: Users without an organizationId see stats across all organizations
-    // (intentional super-admin behavior for platform-level oversight).
     const orgId = args.organizationId ?? user.organizationId;
+    if (!orgId && user.superAdmin !== true) return empty;
+
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const startOfDayMs = startOfDay.getTime();
 
-    // Bounded queries using the composite index to avoid unbounded collection scans.
-    // Note: Counts are approximate once rows exceed MAX_SCAN per category.
-    // For exact counts at scale, consider a dedicated counters table.
+    // Single scan over all requiresApproval items
     const MAX_SCAN = 1000;
-
-    // Get pending items (requiresApproval=true, approved is undefined)
-    // Order desc so newest items are scanned first (important for "today" counts)
-    let pendingItems = await ctx.db
+    let items = await ctx.db
       .query("activityLog")
       .withIndex("by_requiresApproval", (q) => q.eq("requiresApproval", true))
-      .filter((q) => q.eq(q.field("approved"), undefined))
       .order("desc")
       .take(MAX_SCAN);
 
-    // Get approved items (requiresApproval=true, approved=true)
-    let approvedItems = await ctx.db
-      .query("activityLog")
-      .withIndex("by_requiresApproval", (q) =>
-        q.eq("requiresApproval", true).eq("approved", true)
-      )
-      .order("desc")
-      .take(MAX_SCAN);
-
-    // Get rejected items (requiresApproval=true, approved=false)
-    let rejectedItems = await ctx.db
-      .query("activityLog")
-      .withIndex("by_requiresApproval", (q) =>
-        q.eq("requiresApproval", true).eq("approved", false)
-      )
-      .order("desc")
-      .take(MAX_SCAN);
-
-    // Filter by organization if needed
     if (orgId) {
-      pendingItems = pendingItems.filter((item) => item.organizationId === orgId);
-      approvedItems = approvedItems.filter((item) => item.organizationId === orgId);
-      rejectedItems = rejectedItems.filter((item) => item.organizationId === orgId);
+      items = items.filter((item) => item.organizationId === orgId);
     }
 
-    const pending = pendingItems.length;
-    const approvedToday = approvedItems.filter(
-      (item) => item.approvedAt && item.approvedAt >= startOfDayMs
-    ).length;
-    const rejectedToday = rejectedItems.filter(
-      (item) => item.approvedAt && item.approvedAt >= startOfDayMs
-    ).length;
-    const totalProcessed = approvedItems.length + rejectedItems.length;
+    let pending = 0;
+    let approvedToday = 0;
+    let rejectedToday = 0;
+    let totalProcessed = 0;
+
+    for (const item of items) {
+      if (item.approved === undefined) {
+        pending++;
+      } else {
+        totalProcessed++;
+        const isToday = item.approvedAt && item.approvedAt >= startOfDayMs;
+        if (item.approved && isToday) approvedToday++;
+        if (!item.approved && isToday) rejectedToday++;
+      }
+    }
 
     return { pending, approvedToday, rejectedToday, totalProcessed };
   },

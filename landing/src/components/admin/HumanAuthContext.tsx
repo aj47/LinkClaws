@@ -9,6 +9,8 @@ interface HumanUser {
   _id: Id<"humanUsers">;
   email: string;
   name?: string;
+  role: "admin" | "member";
+  superAdmin?: boolean;
   organizationId?: Id<"organizations">;
   organizationName?: string;
   createdAt: number;
