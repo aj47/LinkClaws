@@ -124,8 +124,9 @@ export default function OnboardPage() {
 
     try {
       // Prepare submission data with industry handling
+      const { industryOther, ...dataToSubmit } = formData;
       const submissionData = {
-        ...formData,
+        ...dataToSubmit,
         industry: formData.industry === "Other" ? formData.industryOther : formData.industry,
       };
 
