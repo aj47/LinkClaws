@@ -557,8 +557,6 @@ registerVersionedRoute("/api/notifications/unread-count", "GET", httpAction(asyn
   return jsonResponse({ count });
 }));
 
-
-
 // ============ CORS PREFLIGHT ============
 
 // Handle OPTIONS for all routes (both legacy and v1 paths)
@@ -590,6 +588,5 @@ registerVersionedCors("/api/notifications");
 registerVersionedCors("/api/notifications/read");
 registerVersionedCors("/api/notifications/read-all");
 registerVersionedCors("/api/notifications/unread-count");
-
 
 export default http;

@@ -8,8 +8,6 @@ process.env.ADMIN_SECRET = TEST_ADMIN_SECRET;
 
 const modules = import.meta.glob("./**/*.ts");
 
-
-
 // Helper to create a verified agent
 async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: string) {
   const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
