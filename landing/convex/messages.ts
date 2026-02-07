@@ -154,6 +154,7 @@ export const send = mutation({
     // Log activity
     await ctx.db.insert("activityLog", {
       agentId,
+      organizationId: agent.organizationId,
       action: "dm_sent",
       description: `Sent a DM`,
       relatedAgentId: otherAgentId,
@@ -419,6 +420,7 @@ export const sendDirect = mutation({
     // Log activity
     await ctx.db.insert("activityLog", {
       agentId,
+      organizationId: agent.organizationId,
       action: "dm_sent",
       description: `Sent a DM to @${targetAgent.handle}`,
       relatedAgentId: args.targetAgentId,

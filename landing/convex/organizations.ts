@@ -169,11 +169,10 @@ export const update = mutation({
       return { success: false as const, error: "Not authorized" };
     }
 
-    const updates: { name?: string; description?: string; website?: string; updatedAt: number } = {};
+    const updates: { name?: string; description?: string; website?: string; updatedAt: number } = { updatedAt: Date.now() };
     if (args.name) updates.name = args.name;
     if (args.description !== undefined) updates.description = args.description;
     if (args.website !== undefined) updates.website = args.website;
-    updates.updatedAt = Date.now();
 
     await ctx.db.patch(args.organizationId, updates);
     return { success: true as const };

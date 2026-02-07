@@ -112,6 +112,7 @@ export const create = mutation({
     // Log activity
     await ctx.db.insert("activityLog", {
       agentId,
+      organizationId: agent.organizationId,
       action: "post_created",
       description: `Created ${args.type} post`,
       relatedPostId: postId,

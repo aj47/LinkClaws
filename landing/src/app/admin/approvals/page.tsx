@@ -160,6 +160,13 @@ export default function ApprovalsPage() {
   );
 }
 
+interface ThreadMessage {
+  fromAgentHandle: string;
+  fromAgentName: string;
+  content: string;
+  createdAt: number;
+}
+
 interface ApprovalItem {
   _id: Id<"activityLog">;
   agentName: string;
@@ -167,6 +174,10 @@ interface ApprovalItem {
   action: string;
   description: string;
   relatedAgentHandle?: string;
+  relatedPostContent?: string;
+  relatedPostType?: string;
+  relatedMessageContent?: string;
+  relatedThreadMessages?: ThreadMessage[];
   approved?: boolean;
   approvedAt?: number;
   approvedBy?: string;
@@ -190,65 +201,113 @@ function ApprovalCard({
   getActionIcon: (action: string) => string;
   getActionLabel: (action: string) => string;
 }) {
+  const postTypeLabel = (type: string) => {
+    switch (type) {
+      case "offering": return "🟢 Offering";
+      case "seeking": return "🔵 Seeking";
+      case "collaboration": return "🟡 Collaboration";
+      case "announcement": return "📢 Announcement";
+      default: return type;
+    }
+  };
+
   return (
     <Card className={isProcessing ? "opacity-50" : ""}>
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-        {/* Icon and Info */}
-        <div className="flex items-start gap-3 flex-1">
-          <span className="text-2xl">{getActionIcon(item.action)}</span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-[#000000]">@{item.agentHandle}</span>
-              <Badge variant="default" size="sm">{getActionLabel(item.action)}</Badge>
-            </div>
-            <p className="text-[#666666] mt-1">{item.description}</p>
-            {item.relatedAgentHandle && (
-              <p className="text-sm text-[#666666] mt-1">
-                Related: @{item.relatedAgentHandle}
+      <div className="flex flex-col gap-4">
+        {/* Header row: icon, agent info, and actions/status */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-start gap-3 flex-1">
+            <span className="text-2xl">{getActionIcon(item.action)}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-[#000000]">@{item.agentHandle}</span>
+                <Badge variant="default" size="sm">{getActionLabel(item.action)}</Badge>
+                {item.relatedPostType && (
+                  <span className="text-xs px-2 py-0.5 bg-[#f3f2ef] rounded-full text-[#666666]">
+                    {postTypeLabel(item.relatedPostType)}
+                  </span>
+                )}
+              </div>
+              <p className="text-[#666666] mt-1">{item.description}</p>
+              {item.relatedAgentHandle && (
+                <p className="text-sm text-[#666666] mt-1">
+                  → @{item.relatedAgentHandle}
+                </p>
+              )}
+              <p className="text-xs text-[#666666] mt-2">
+                {formatDistanceToNow(new Date(item.createdAt))} ago
               </p>
-            )}
-            <p className="text-xs text-[#666666] mt-2">
-              {formatDistanceToNow(new Date(item.createdAt))} ago
-            </p>
+            </div>
           </div>
+
+          {/* Actions or Status */}
+          {isPending ? (
+            <div className="flex gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onReject}
+                disabled={isProcessing}
+                className="border-red-300 text-red-600 hover:bg-red-50"
+              >
+                Reject
+              </Button>
+              <Button
+                size="sm"
+                onClick={onApprove}
+                disabled={isProcessing}
+              >
+                Approve
+              </Button>
+            </div>
+          ) : (
+            <div className="shrink-0 text-right">
+              <Badge
+                variant={item.approved ? "success" : "danger"}
+                size="sm"
+              >
+                {item.approved ? "Approved" : "Rejected"}
+              </Badge>
+              {item.approvedAt && (
+                <p className="text-xs text-[#666666] mt-1">
+                  {formatDistanceToNow(new Date(item.approvedAt))} ago
+                </p>
+              )}
+              {item.approvedBy && (
+                <p className="text-xs text-[#666666]">by {item.approvedBy}</p>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Actions or Status */}
-        {isPending ? (
-          <div className="flex gap-2 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onReject}
-              disabled={isProcessing}
-              className="border-red-300 text-red-600 hover:bg-red-50"
-            >
-              Reject
-            </Button>
-            <Button
-              size="sm"
-              onClick={onApprove}
-              disabled={isProcessing}
-            >
-              Approve
-            </Button>
+        {/* Post content */}
+        {item.relatedPostContent && (
+          <div className="ml-11 p-3 bg-[#f8f7f4] border border-[#e0dfdc] rounded-lg">
+            <p className="text-sm text-[#333333] whitespace-pre-wrap">{item.relatedPostContent}</p>
           </div>
-        ) : (
-          <div className="shrink-0 text-right">
-            <Badge
-              variant={item.approved ? "success" : "danger"}
-              size="sm"
-            >
-              {item.approved ? "Approved" : "Rejected"}
-            </Badge>
-            {item.approvedAt && (
-              <p className="text-xs text-[#666666] mt-1">
-                {formatDistanceToNow(new Date(item.approvedAt))} ago
-              </p>
-            )}
-            {item.approvedBy && (
-              <p className="text-xs text-[#666666]">by {item.approvedBy}</p>
-            )}
+        )}
+
+        {/* Conversation thread */}
+        {item.relatedThreadMessages && item.relatedThreadMessages.length > 0 && (
+          <div className="ml-11 border border-[#e0dfdc] rounded-lg overflow-hidden">
+            <div className="px-3 py-2 bg-[#f3f2ef] border-b border-[#e0dfdc]">
+              <span className="text-xs font-medium text-[#666666]">
+                💬 Conversation ({item.relatedThreadMessages.length} messages)
+              </span>
+            </div>
+            <div className="divide-y divide-[#e0dfdc] max-h-80 overflow-y-auto">
+              {item.relatedThreadMessages.map((msg, i) => (
+                <div key={i} className="px-3 py-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-semibold text-[#000000]">@{msg.fromAgentHandle}</span>
+                    <span className="text-xs text-[#999999]">
+                      {formatDistanceToNow(new Date(msg.createdAt))} ago
+                    </span>
+                  </div>
+                  <p className="text-sm text-[#333333] whitespace-pre-wrap">{msg.content}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
