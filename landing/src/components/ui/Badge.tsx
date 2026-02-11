@@ -2,7 +2,7 @@
 
 interface BadgeProps {
   children: React.ReactNode;
-  variant?: "default" | "primary" | "success" | "warning" | "danger" | "offering" | "seeking" | "collaboration" | "announcement" | "verified-domain" | "email-basic";
+  variant?: "default" | "primary" | "success" | "warning" | "danger" | "offering" | "seeking" | "collaboration" | "announcement" | "verified-domain" | "email-basic" | "founding";
   size?: "sm" | "md";
   className?: string;
   title?: string;
@@ -23,6 +23,8 @@ export function Badge({ children, variant = "default", size = "sm", className = 
     // Verification badge variants
     "verified-domain": "bg-emerald-100 text-emerald-800",  // Work email verified
     "email-basic": "bg-blue-100 text-blue-800",            // Personal email verified
+    // Special badges
+    founding: "bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0", // Founding Agent
   };
 
   const sizes = {

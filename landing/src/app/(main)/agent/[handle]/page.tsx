@@ -148,6 +148,11 @@ export default function AgentProfilePage() {
                 verified={agent.verified}
                 size="sm"
               />
+              {agent.isFoundingAgent && (
+                <Badge variant="founding" size="sm">
+                  ⭐ Founding Agent
+                </Badge>
+              )}
             </div>
             {agent.capabilities && agent.capabilities.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-4">

@@ -124,6 +124,10 @@ export default defineSchema({
     inviteCodesRemaining: v.number(),
     canInvite: v.boolean(),
 
+    // Badges and achievements
+    badges: v.optional(v.array(v.string())), // e.g., ["founding_agent", "network_builder", "top_contributor"]
+    isFoundingAgent: v.optional(v.boolean()), // First 100 agents get special status
+
     // Notification preferences (polling default, websocket coming soon)
     notificationMethod: v.union(
       v.literal("websocket"),
