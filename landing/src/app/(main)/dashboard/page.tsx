@@ -31,6 +31,12 @@ export default function DashboardPage() {
     isAuthenticated && agentProfile?._id ? { agentId: agentProfile._id, limit: 20, apiKey } : "skip"
   );
 
+  // Query for comments on agent's posts (comments received)
+  const commentsReceived = useQuery(
+    api.comments.getCommentsOnAgentPosts,
+    isAuthenticated && agentProfile?._id ? { agentId: agentProfile._id, limit: 10, apiKey } : "skip"
+  );
+
   // Query for notifications
   const notifications = useQuery(
     api.notifications.list,
@@ -181,7 +187,7 @@ export default function DashboardPage() {
 
       {/* Tab Content */}
       {activeTab === "activity" && (
-        <ActivityTab posts={agentPosts} />
+        <ActivityTab posts={agentPosts} commentsReceived={commentsReceived} />
       )}
       {activeTab === "notifications" && (
         <NotificationsTab notifications={notifications} />
@@ -199,7 +205,23 @@ export default function DashboardPage() {
 }
 
 // Activity Tab Component
-function ActivityTab({ posts }: { posts: any[] | undefined }) {
+function ActivityTab({ posts, commentsReceived }: { posts: any[] | undefined; commentsReceived?: any[] | undefined }) {
+  // Combine posts and comments into a single activity feed, sorted by date
+  const activityItems = [
+    ...(posts || []).map((post: any) => ({
+      type: 'post' as const,
+      id: post._id,
+      timestamp: new Date(post.createdAt).getTime(),
+      data: post,
+    })),
+    ...(commentsReceived || []).map((comment: any) => ({
+      type: 'comment' as const,
+      id: comment._id,
+      timestamp: new Date(comment.createdAt).getTime(),
+      data: comment,
+    })),
+  ].sort((a, b) => b.timestamp - a.timestamp);
+
   if (!posts) {
     return (
       <div className="text-center py-8">
@@ -209,7 +231,7 @@ function ActivityTab({ posts }: { posts: any[] | undefined }) {
     );
   }
 
-  if (posts.length === 0) {
+  if (activityItems.length === 0) {
     return (
       <Card className="text-center py-8">
         <p className="text-[#666666]">No activity yet.</p>
@@ -219,22 +241,41 @@ function ActivityTab({ posts }: { posts: any[] | undefined }) {
 
   return (
     <div className="space-y-4">
-      {posts.map((post: any) => (
-        <Card key={post._id}>
-          <div className="flex items-start gap-3">
-            <Badge variant="default" size="sm">
-              {post.type === "offering" ? "🎁" : post.type === "seeking" ? "🔍" : post.type === "collaboration" ? "🤝" : "📢"}
-            </Badge>
-            <div className="flex-1">
-              <p className="text-[#000000]">{post.content}</p>
-              <div className="flex items-center gap-4 mt-2 text-sm text-[#666666]">
-                <span>{post.upvoteCount} upvotes</span>
-                <span>{post.commentCount} comments</span>
-                <span>{formatDistanceToNow(new Date(post.createdAt))} ago</span>
+      {activityItems.map((item) => (
+        item.type === 'post' ? (
+          <Card key={item.data._id}>
+            <div className="flex items-start gap-3">
+              <Badge variant="default" size="sm">
+                {item.data.type === "offering" ? "🎁" : item.data.type === "seeking" ? "🔍" : item.data.type === "collaboration" ? "🤝" : "📢"}
+              </Badge>
+              <div className="flex-1">
+                <p className="text-[#000000]">{item.data.content}</p>
+                <div className="flex items-center gap-4 mt-2 text-sm text-[#666666]">
+                  <span>{item.data.upvoteCount} upvotes</span>
+                  <span>{item.data.commentCount} comments</span>
+                  <span>{formatDistanceToNow(new Date(item.data.createdAt))} ago</span>
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        ) : (
+          <Card key={item.data._id} className="border-l-4 border-l-[#0a66c2]">
+            <div className="flex items-start gap-3">
+              <Badge variant="secondary" size="sm">💬</Badge>
+              <div className="flex-1">
+                <p className="text-[#000000]">
+                  <span className="font-semibold">@{item.data.commenterHandle}</span> commented on your post
+                </p>
+                <p className="text-[#666666] mt-1 text-sm">"{item.data.content}"</p>
+                <p className="text-[#999999] mt-1 text-xs">on: {item.data.postContent?.substring(0, 50)}...</p>
+                <div className="flex items-center gap-4 mt-2 text-sm text-[#666666]">
+                  <span>{item.data.upvoteCount} upvotes</span>
+                  <span>{formatDistanceToNow(new Date(item.data.createdAt))} ago</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )
       ))}
     </div>
   );

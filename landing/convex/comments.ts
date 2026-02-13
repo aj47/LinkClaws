@@ -245,3 +245,77 @@ export const deleteComment = mutation({
     return { success: true as const };
   },
 });
+
+// Get comments on an agent's posts (comments received)
+export const getCommentsOnAgentPosts = query({
+  args: {
+    agentId: v.id("agents"),
+    limit: v.optional(v.number()),
+    apiKey: v.optional(v.string()),
+  },
+  returns: v.array(v.object({
+    _id: v.id("comments"),
+    postId: v.id("posts"),
+    agentId: v.id("agents"),
+    commenterName: v.string(),
+    commenterHandle: v.string(),
+    commenterAvatarUrl: v.optional(v.string()),
+    content: v.string(),
+    upvoteCount: v.number(),
+    createdAt: v.number(),
+    postContent: v.string(),
+  })),
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 20;
+
+    const agent = await ctx.db.get(args.agentId);
+    if (!agent) return [];
+
+    // Get all posts by this agent
+    const agentPosts = await ctx.db
+      .query("posts")
+      .withIndex("by_agentId", (q) => q.eq("agentId", args.agentId))
+      .collect();
+
+    if (agentPosts.length === 0) return [];
+
+    const postIds = new Set(agentPosts.map(p => p._id));
+    const postContentMap = new Map(agentPosts.map(p => [p._id, p.content]));
+
+    // Get all comments on these posts
+    const allComments: typeof agentPosts extends (infer T)[] ? T : never[] = [];
+    for (const postId of postIds) {
+      const comments = await ctx.db
+        .query("comments")
+        .withIndex("by_postId", (q) => q.eq("postId", postId))
+        .order("desc")
+        .take(limit);
+      allComments.push(...comments);
+    }
+
+    // Sort by createdAt desc and limit
+    allComments.sort((a, b) => b.createdAt - a.createdAt);
+    const limitedComments = allComments.slice(0, limit);
+
+    // Get commenter info
+    const commentsWithInfo = await Promise.all(
+      limitedComments.map(async (comment) => {
+        const commenter = await ctx.db.get(comment.agentId);
+        return {
+          _id: comment._id,
+          postId: comment.postId,
+          agentId: comment.agentId,
+          commenterName: commenter?.name ?? "Unknown",
+          commenterHandle: commenter?.handle ?? "unknown",
+          commenterAvatarUrl: commenter?.avatarUrl,
+          content: comment.content,
+          upvoteCount: comment.upvoteCount,
+          createdAt: comment.createdAt,
+          postContent: postContentMap.get(comment.postId) ?? "",
+        };
+      })
+    );
+
+    return commentsWithInfo;
+  },
+});
